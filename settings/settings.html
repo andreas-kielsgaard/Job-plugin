@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Jobnet AI Sorter settings</title><link rel="stylesheet" href="settings.css"></head>
 <body>
   <main>
-    <header><p class="eyebrow">JOBNET AI SORTER</p><h1>Your job search context</h1><p>Claude uses these details when you start filtering a Jobnet search.</p></header>
+    <header><p class="eyebrow">JOBNET AI SORTER</p><h1>Your job search context</h1><p>The provider you choose uses these details when you filter a Jobnet search.</p></header>
     <form id="settingsForm">
       <section><h2>Claude connection</h2>
         <label for="apiKey">Anthropic API key</label>
@@ -13,6 +13,13 @@
         <label for="model">Claude model type</label>
         <select id="model" required><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
         <p class="hint">The latest available version of this type is selected when filtering starts. Haiku is the fastest and least expensive.</p>
+      </section>
+      <section><h2>TypeSafe Jev connection</h2>
+        <label for="jevApiKey">TypeSafe API key</label>
+        <input id="jevApiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
+        <p id="jevKeyStatus" class="hint"></p>
+        <button id="deleteJevKey" type="button" class="text-button">Remove saved TypeSafe key</button>
+        <p class="hint">Jev uses the latest model alias. It classifies relevance, then scores match strength on a gradient.</p>
       </section>
       <section><h2>About you</h2>
         <label for="cv">CV text</label>
@@ -26,7 +33,7 @@
       </section>
       <div class="actions"><button type="submit">Save settings</button><span id="notice" role="status"></span></div>
     </form>
-    <p class="privacy">Your key and text stay in Firefox extension storage until you start filtering. Then the extension sends them with posting text to Anthropic. The key is never inserted into Jobnet.</p>
+    <p class="privacy">Keys and text stay in Firefox extension storage until filtering starts. The chosen provider receives the instruction, preferences and posting text; it receives CV text for qualification scoring. Keys are never inserted into Jobnet.</p>
   </main>
   <script src="settings.js"></script>
 </body>

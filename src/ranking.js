@@ -5,11 +5,11 @@
 
   function normalizeGrade(input) {
     if (!input || !Object.hasOwn(groupOrder, input.category)) {
-      throw new Error("Claude returned an unknown relevance group.");
+      throw new Error("The provider returned an unknown relevance group.");
     }
     const score = Number(input.score);
     if (!Number.isInteger(score) || score < 0 || score > 100) {
-      throw new Error("Claude returned an invalid fit score.");
+      throw new Error("The provider returned an invalid fit score.");
     }
     const reason = String(input.reason || "").trim();
     const shortened = reason.length > 240

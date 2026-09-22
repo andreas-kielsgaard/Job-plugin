@@ -10,6 +10,7 @@
   let statusText;
   let stopButton;
   let promptDialog;
+  let availableKeys = { hasApiKey: false, hasJevApiKey: false };
 
   browser.runtime.onMessage.addListener((message) => {
     if (message?.type === "JAS_STATUS") return Promise.resolve(status());
@@ -75,12 +76,14 @@
       </aside>
       <div class="jas-overlay" hidden>
         <section class="jas-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-dialog-title">
-          <div class="jas-dialog-head"><h2 id="jas-dialog-title">Filter this search with Claude</h2><button class="jas-close" type="button" aria-label="Close">×</button></div>
+          <div class="jas-dialog-head"><h2 id="jas-dialog-title">Filter this search with AI</h2><button class="jas-close" type="button" aria-label="Close">×</button></div>
           <p>Your instruction and saved preferences guide relevance. Your CV helps score qualifications. Cards are screened in batches; promising Jobnet descriptions are then read and graded together.</p>
-          <label for="jas-prompt">What should Claude prioritize for this search?</label>
+          <label for="jas-prompt">What should the model prioritize for this search?</label>
           <textarea id="jas-prompt" rows="5" maxlength="6000" placeholder="For example: prioritize senior roles in Copenhagen with flexible work; avoid sales positions."></textarea>
-          <label for="jas-model">Claude model type for this run</label>
-          <select id="jas-model"><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
+          <label for="jas-provider">Provider for this run</label>
+          <select id="jas-provider"><option value="claude">Claude</option><option value="jev">TypeSafe Jev</option></select>
+          <div class="jas-claude-model"><label for="jas-model">Claude model type for this run</label>
+          <select id="jas-model"><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select></div>
           <p class="jas-dialog-note"></p>
           <div class="jas-dialog-actions"><button class="jas-cancel" type="button">Cancel</button><button class="jas-start" type="button">Start filtering</button></div>
         </section>
@@ -96,6 +99,7 @@
     root.querySelector(".jas-cancel").addEventListener("click", closePrompt);
     promptDialog.addEventListener("click", (event) => { if (event.target === promptDialog) closePrompt(); });
     root.querySelector(".jas-start").addEventListener("click", startFilter);
+    root.querySelector("#jas-provider").addEventListener("change", updateProvider);
     stopButton.addEventListener("click", () => {
       state.stop = true;
       setStatus("Stopping after the current step…");
@@ -243,15 +247,22 @@
       browser.runtime.sendMessage({ type: "JAS_HAS_KEY" }),
       browser.runtime.sendMessage({ type: "JAS_GET_MODEL_TYPE" })
     ]);
+    availableKeys = settings;
     root.querySelector("#jas-model").value = modelSettings.model;
-    const note = root.querySelector(".jas-dialog-note");
-    note.textContent = settings.hasApiKey
-      ? `${cards().length} loaded cards. Claude reviews cards in batches of up to 10, then reads promising Jobnet descriptions.`
-      : "Save a Claude API key in the full-page settings first.";
-    root.querySelector(".jas-start").disabled = !settings.hasApiKey || !cards().length;
+    updateProvider();
     promptDialog.hidden = false;
     root.querySelector("#jas-prompt").focus();
     return { ok: true };
+  }
+
+  function updateProvider() {
+    const jev = root.querySelector("#jas-provider").value === "jev";
+    root.querySelector(".jas-claude-model").hidden = jev;
+    const hasKey = jev ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
+    root.querySelector(".jas-dialog-note").textContent = hasKey
+      ? `${cards().length} loaded cards. ${jev ? "Jev" : "Claude"} screens cards in batches, then reads promising Jobnet descriptions.`
+      : `Save a ${jev ? "TypeSafe Jev" : "Claude"} API key in the full-page settings first.`;
+    root.querySelector(".jas-start").disabled = !hasKey || !cards().length;
   }
 
   function closePrompt() {
@@ -261,6 +272,7 @@
   function startFilter() {
     const prompt = root.querySelector("#jas-prompt").value.trim();
     const model = root.querySelector("#jas-model").value;
+    const provider = root.querySelector("#jas-provider").value;
     if (!prompt) { root.querySelector(".jas-dialog-note").textContent = "Enter an instruction for this run."; return; }
     closePrompt();
     const jobs = cards();
@@ -269,39 +281,41 @@
       job.article.querySelector(".jas-grade")?.remove();
     }
     setRunning("reviewing", jobs.length);
-    log(`Started Claude review of ${jobs.length} loaded cards.`);
-    state.operation = Promise.resolve().then(() => filterJobs(jobs, prompt, model));
+    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded cards.`);
+    state.operation = Promise.resolve().then(() => filterJobs(jobs, prompt, model, provider));
   }
 
-  async function filterJobs(jobs, prompt, model) {
+  async function filterJobs(jobs, prompt, model, provider) {
     const key = searchKey();
+    const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
+    const batchSize = provider === "jev" ? 5 : 10;
     try {
-      for (let offset = 0; offset < jobs.length; offset += 10) {
+      for (let offset = 0; offset < jobs.length; offset += batchSize) {
         if (state.stop) break;
-        const batch = jobs.slice(offset, offset + 10);
+        const batch = jobs.slice(offset, offset + batchSize);
         if (searchKey() !== key || batch.some((job) => !job.article.isConnected)) throw new Error("The search changed during filtering. Start again for the new search.");
-        setStatus(`Reviewing cards ${offset + 1}–${offset + batch.length} of ${jobs.length} with Claude ${model}.`);
+        setStatus(`Reviewing cards ${offset + 1}–${offset + batch.length} of ${jobs.length} with ${name}.`);
         log(state.message);
-        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model,
+        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url })) });
         if (state.stop) break;
-        if (!response?.ok) throw new Error(response?.error || "Claude did not return grades.");
+        if (!response?.ok) throw new Error(response?.error || `${name} did not return grades.`);
         if (response.metrics) {
           for (const key of Object.keys(state.metrics)) state.metrics[key] += Number(response.metrics[key] || 0);
         }
         const grades = new Map(response.grades.map((grade) => [grade.id, grade]));
         for (const job of batch) {
-          if (!grades.has(job.id)) throw new Error("Claude omitted a card from this batch.");
+          if (!grades.has(job.id)) throw new Error(`${name} omitted a card from this batch.`);
           job.grade = JobnetRanking.normalizeGrade(grades.get(job.id));
           renderGrade(job);
           state.done += 1;
         }
         sortJobs(jobs);
-        logBatchResults(batch, Math.floor(offset / 10) + 1, Math.ceil(jobs.length / 10));
+        logBatchResults(batch, Math.floor(offset / batchSize) + 1, Math.ceil(jobs.length / batchSize));
         setStatus(`Completed ${state.done} of ${jobs.length} cards in batches.`);
       }
       sortJobs(jobs);
-      log(`Claude API: ${state.metrics.requests} requests, ${state.metrics.inputTokens + state.metrics.cacheCreationTokens + state.metrics.cacheReadTokens} input tokens, ${state.metrics.outputTokens} output tokens. Jobnet details: ${state.metrics.detailRequests} loaded, ${state.metrics.cacheHits} reused.`);
+      log(`${name} API: ${state.metrics.requests} requests, ${state.metrics.inputTokens + state.metrics.cacheCreationTokens + state.metrics.cacheReadTokens} input tokens, ${state.metrics.outputTokens} output tokens. Jobnet details: ${state.metrics.detailRequests} loaded, ${state.metrics.cacheHits} reused.`);
       finish(state.stop ? "stopped" : "done", `${state.stop ? "Stopped" : "Finished"}: ${state.done} of ${jobs.length} cards reviewed and sorted.`);
     } catch (error) {
       sortJobs(jobs);
