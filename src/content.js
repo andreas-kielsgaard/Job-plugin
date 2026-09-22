@@ -86,6 +86,7 @@
         </section>
       </div>`;
     document.body.append(root);
+    root.querySelector(".jas-panel-head strong").append(` · v${browser.runtime.getManifest().version}`);
     logList = root.querySelector(".jas-log");
     statusText = root.querySelector(".jas-status");
     stopButton = root.querySelector(".jas-stop");
