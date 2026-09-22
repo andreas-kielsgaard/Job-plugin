@@ -71,9 +71,11 @@
       <div class="jas-overlay" hidden>
         <section class="jas-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-dialog-title">
           <div class="jas-dialog-head"><h2 id="jas-dialog-title">Filter this search with Claude</h2><button class="jas-close" type="button" aria-label="Close">×</button></div>
-          <p>Your saved CV and job preferences, this instruction, and each loaded card will be sent to Anthropic as the run progresses.</p>
+          <p>Your instruction and saved preferences guide relevance. Your CV helps score qualifications. Cards are screened in batches; promising Jobnet descriptions are then read and graded together.</p>
           <label for="jas-prompt">What should Claude prioritize for this search?</label>
           <textarea id="jas-prompt" rows="5" maxlength="6000" placeholder="For example: prioritize senior roles in Copenhagen with flexible work; avoid sales positions."></textarea>
+          <label for="jas-model">Claude model type for this run</label>
+          <select id="jas-model"><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
           <p class="jas-dialog-note"></p>
           <div class="jas-dialog-actions"><button class="jas-cancel" type="button">Cancel</button><button class="jas-start" type="button">Start filtering</button></div>
         </section>
@@ -113,11 +115,12 @@
 
   function setRunning(phase, total) {
     ensureUi();
+    logList.replaceChildren();
     state.phase = phase;
     state.done = 0;
     state.total = total;
     state.stop = false;
-    state.metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
+    state.metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0, detailRequests: 0, cacheHits: 0 };
     stopButton.hidden = false;
     root.querySelector(".jas-panel").classList.remove("jas-collapsed");
   }
@@ -210,10 +213,14 @@
   async function openPrompt() {
     if (state.operation) return { ok: false, error: "Stop the current operation first." };
     ensureUi();
-    const settings = await browser.runtime.sendMessage({ type: "JAS_HAS_KEY" });
+    const [settings, modelSettings] = await Promise.all([
+      browser.runtime.sendMessage({ type: "JAS_HAS_KEY" }),
+      browser.runtime.sendMessage({ type: "JAS_GET_MODEL_TYPE" })
+    ]);
+    root.querySelector("#jas-model").value = modelSettings.model;
     const note = root.querySelector(".jas-dialog-note");
     note.textContent = settings.hasApiKey
-      ? `${cards().length} loaded cards. Claude may make one or more API requests per card.`
+      ? `${cards().length} loaded cards. Claude reviews cards in batches of up to 10, then reads promising Jobnet descriptions.`
       : "Save a Claude API key in the full-page settings first.";
     root.querySelector(".jas-start").disabled = !settings.hasApiKey || !cards().length;
     promptDialog.hidden = false;
@@ -227,6 +234,7 @@
 
   function startFilter() {
     const prompt = root.querySelector("#jas-prompt").value.trim();
+    const model = root.querySelector("#jas-model").value;
     if (!prompt) { root.querySelector(".jas-dialog-note").textContent = "Enter an instruction for this run."; return; }
     closePrompt();
     const jobs = cards();
@@ -236,32 +244,37 @@
     }
     setRunning("reviewing", jobs.length);
     log(`Started Claude review of ${jobs.length} loaded cards.`);
-    state.operation = Promise.resolve().then(() => filterJobs(jobs, prompt));
+    state.operation = Promise.resolve().then(() => filterJobs(jobs, prompt, model));
   }
 
-  async function filterJobs(jobs, prompt) {
+  async function filterJobs(jobs, prompt, model) {
     const key = searchKey();
     try {
-      for (const job of jobs) {
+      for (let offset = 0; offset < jobs.length; offset += 10) {
         if (state.stop) break;
-        if (searchKey() !== key || !job.article.isConnected) throw new Error("The search changed during filtering. Start again for the new search.");
-        setStatus(`Reviewing ${state.done + 1} of ${jobs.length}: ${job.title}`);
+        const batch = jobs.slice(offset, offset + 10);
+        if (searchKey() !== key || batch.some((job) => !job.article.isConnected)) throw new Error("The search changed during filtering. Start again for the new search.");
+        setStatus(`Reviewing cards ${offset + 1}–${offset + batch.length} of ${jobs.length} with Claude ${model}.`);
         log(state.message);
-        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE", prompt, job: {
-          id: job.id, title: job.title, summary: job.summary, url: job.url
-        } });
+        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model,
+          jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url })) });
         if (state.stop) break;
-        if (!response?.ok) throw new Error(response?.error || "Claude did not return a grade.");
+        if (!response?.ok) throw new Error(response?.error || "Claude did not return grades.");
         if (response.metrics) {
           for (const key of Object.keys(state.metrics)) state.metrics[key] += Number(response.metrics[key] || 0);
         }
-        job.grade = JobnetRanking.normalizeGrade(response.grade);
-        renderGrade(job);
-        state.done += 1;
-        log(`${LABELS[job.grade.category]} · ${job.grade.score}/100 · ${job.title}: ${job.grade.reason}`);
+        const grades = new Map(response.grades.map((grade) => [grade.id, grade]));
+        for (const job of batch) {
+          if (!grades.has(job.id)) throw new Error("Claude omitted a card from this batch.");
+          job.grade = JobnetRanking.normalizeGrade(grades.get(job.id));
+          renderGrade(job);
+          state.done += 1;
+          log(`${LABELS[job.grade.category]} · ${job.grade.score}/100 · ${job.title}: ${job.grade.reason}`);
+        }
+        sortJobs(jobs);
       }
       sortJobs(jobs);
-      log(`Claude API: ${state.metrics.requests} requests, ${state.metrics.inputTokens + state.metrics.cacheCreationTokens + state.metrics.cacheReadTokens} input tokens, ${state.metrics.outputTokens} output tokens.`);
+      log(`Claude API: ${state.metrics.requests} requests, ${state.metrics.inputTokens + state.metrics.cacheCreationTokens + state.metrics.cacheReadTokens} input tokens, ${state.metrics.outputTokens} output tokens. Jobnet details: ${state.metrics.detailRequests} loaded, ${state.metrics.cacheHits} reused.`);
       finish(state.stop ? "stopped" : "done", `${state.stop ? "Stopped" : "Finished"}: ${state.done} of ${jobs.length} cards reviewed and sorted.`);
     } catch (error) {
       sortJobs(jobs);

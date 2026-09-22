@@ -3,19 +3,20 @@
 
   const store = browser.storage.local;
   const controllers = new Map();
-  const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+  const DEFAULT_MODEL = "haiku";
   const DETAIL_CACHE_KEY = "jobDetailCache";
   const DETAIL_CACHE_AGE = 24 * 60 * 60 * 1000;
-  const DETAIL_CACHE_LIMIT = 60;
+  const DETAIL_CACHE_LIMIT = 200;
   let cacheWrites = Promise.resolve();
 
   browser.runtime.onMessage.addListener((message, sender) => {
     if (!message || typeof message !== "object") return undefined;
     if (message.type === "JAS_GET_SETTINGS") return getSettings();
     if (message.type === "JAS_HAS_KEY") return store.get("apiKey").then((data) => ({ hasApiKey: Boolean(data.apiKey) }));
+    if (message.type === "JAS_GET_MODEL_TYPE") return store.get("model").then((data) => ({ model: JobnetModels.typeOf(data.model) }));
     if (message.type === "JAS_SAVE_SETTINGS") return saveSettings(message.settings);
     if (message.type === "JAS_DELETE_KEY") return deleteKey();
-    if (message.type === "JAS_GRADE") return grade(message, sender);
+    if (message.type === "JAS_GRADE_BATCH") return gradeBatch(message, sender);
     if (message.type === "JAS_CANCEL") return cancel(sender);
     return undefined;
   });
@@ -26,7 +27,7 @@
       hasApiKey: Boolean(data.apiKey),
       cv: data.cv || "",
       preferences: data.preferences || "",
-      model: data.model || DEFAULT_MODEL
+      model: JobnetModels.typeOf(data.model || DEFAULT_MODEL)
     };
   }
 
@@ -35,7 +36,7 @@
     const changes = {
       cv: String(settings.cv || "").slice(0, 30000),
       preferences: String(settings.preferences || "").slice(0, 15000),
-      model: String(settings.model || DEFAULT_MODEL).trim().slice(0, 120)
+      model: JobnetModels.typeOf(settings.model || DEFAULT_MODEL)
     };
     const apiKey = String(settings.apiKey || "").trim();
     if (apiKey) changes.apiKey = apiKey;
@@ -52,32 +53,44 @@
     return sender.tab?.id && /^https:\/\/jobnet\.dk\/find-job(?:[?#]|$)/.test(sender.url || "");
   }
 
-  async function grade(message, sender) {
+  async function gradeBatch(message, sender) {
     if (!validSearchSender(sender)) return { ok: false, error: "Open a Jobnet search page." };
     const tabId = sender.tab.id;
     if (controllers.has(tabId)) return { ok: false, error: "A Claude request is already running in this tab." };
     const data = await store.get(["apiKey", "cv", "preferences", "model"]);
     if (!data.apiKey) return { ok: false, error: "Save a Claude API key in settings first." };
-    const id = String(message.job?.id || "");
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) return { ok: false, error: "Invalid Jobnet card ID." };
+    const jobs = Array.isArray(message.jobs) ? message.jobs : [];
+    if (!jobs.length || jobs.length > 10) return { ok: false, error: "Review 1–10 Jobnet cards at a time." };
+    const ids = jobs.map((job) => String(job?.id || ""));
+    if (new Set(ids).size !== ids.length || ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id))) {
+      return { ok: false, error: "Invalid or duplicate Jobnet card ID." };
+    }
     const controller = new AbortController();
     controllers.set(tabId, controller);
     try {
       const onActivity = (text) => browser.tabs.sendMessage(tabId, { type: "JAS_ACTIVITY", text }).catch(() => {});
-      const metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
-      const result = await JobnetClaude.gradeJob({
+      const metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0, detailRequests: 0, cacheHits: 0 };
+      onActivity("Finding the latest available Claude model for this type.");
+      const modelType = ["haiku", "sonnet", "opus"].includes(message.model) ? message.model : JobnetModels.typeOf(data.model);
+      const model = await JobnetModels.resolve(modelType, data.apiKey, controller.signal);
+      onActivity(`Using ${model}.`);
+      const result = await JobnetClaude.gradeBatch({
         apiKey: data.apiKey,
-        model: data.model || DEFAULT_MODEL,
+        model,
         cv: data.cv || "",
         preferences: data.preferences || "",
         prompt: String(message.prompt || "").slice(0, 6000),
-        job: {
-          id,
-          title: String(message.job.title || "").slice(0, 300),
-          summary: String(message.job.summary || "").slice(0, 3500),
-          url: String(message.job.url || "").slice(0, 500)
+        jobs: jobs.map((job) => ({
+          id: String(job.id),
+          title: String(job.title || "").slice(0, 300),
+          summary: String(job.summary || "").slice(0, 3500),
+          url: String(job.url || "").slice(0, 500)
+        })),
+        readDetails: async (id) => {
+          const detail = await cachedJobDetails(id, controller.signal);
+          metrics[detail.fromCache ? "cacheHits" : "detailRequests"] += 1;
+          return detail;
         },
-        readDetails: () => cachedJobDetails(id, controller.signal),
         onActivity,
         onMetrics: (sample) => {
           metrics.requests += 1;
@@ -85,7 +98,7 @@
         },
         signal: controller.signal
       });
-      return { ok: true, grade: result, metrics };
+      return { ok: true, grades: result, metrics };
     } catch (error) {
       return { ok: false, error: error.name === "AbortError" ? "Stopped." : String(error.message || error).slice(0, 600) };
     } finally {
@@ -133,10 +146,7 @@
     const posting = queries.find((query) => query?.state?.data?.id === id)?.state?.data;
     if (!posting?.body) return "Jobnet did not expose a full description. Grade from the search card only.";
     const bodyDoc = new DOMParser().parseFromString(posting.body, "text/html");
-    bodyDoc.querySelectorAll("script, style").forEach((element) => element.remove());
-    bodyDoc.body.querySelectorAll("br, p, li, div, h1, h2, h3, h4, h5, h6")
-      .forEach((element) => element.append("\n"));
-    const body = bodyDoc.body.textContent || "";
+    const body = compressPosting(bodyDoc);
     const location = posting.job?.address;
     const detail = [
       posting.title,
@@ -144,8 +154,27 @@
       location?.city ? `Location: ${location.postalCode || ""} ${location.city}` : "",
       posting.job?.isPartTime ? "Part-time" : "Full-time or unspecified",
       body
-    ].filter(Boolean).join("\n\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").slice(0, 18000);
+    ].filter(Boolean).join("\n\n").slice(0, 9000);
     if (detail.length < 100) return "Jobnet did not expose a full description. Grade from the search card only.";
     return detail;
+  }
+
+  function compressPosting(doc) {
+    doc.querySelectorAll("script, style, svg, template, button, [hidden], [aria-hidden='true']")
+      .forEach((element) => element.remove());
+    doc.body.querySelectorAll("br, p, li, div, h1, h2, h3, h4, h5, h6")
+      .forEach((element) => element.append("\n"));
+    const seen = new Set();
+    return (doc.body.textContent || "")
+      .split(/\n+/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter((line) => {
+        if (!line || /^https?:\/\/\S+$/.test(line) || /^\S+@\S+\.\S+$/.test(line)) return false;
+        const key = line.toLocaleLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .join("\n");
   }
 })();

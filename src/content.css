@@ -16,7 +16,8 @@
 #jas-root .jas-dialog h2 { margin: 0; font-size: 21px; }
 #jas-root .jas-dialog p { margin: 14px 0; }
 #jas-root .jas-dialog label { display: block; margin-bottom: 6px; font-weight: 700; }
-#jas-root .jas-dialog textarea { width: 100%; resize: vertical; padding: 10px; border: 1px solid #78958a; border-radius: 7px; font: inherit; }
+#jas-root .jas-dialog textarea, #jas-root .jas-dialog select { width: 100%; padding: 10px; border: 1px solid #78958a; border-radius: 7px; font: inherit; background: white; color: #18302b; }
+#jas-root .jas-dialog textarea { resize: vertical; }
 #jas-root .jas-dialog-note { min-height: 20px; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-actions { justify-content: flex-end; }
 #main-content article.jas-clear .card { border-left: 7px solid #24845a; background: #e7f6ec; }

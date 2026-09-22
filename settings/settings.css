@@ -7,9 +7,10 @@ h1 { margin: 0; font-size: clamp(30px, 5vw, 42px); }
 h2 { margin: 0 0 18px; font-size: 21px; }
 section { margin-bottom: 18px; padding: 25px; border: 1px solid #d6e2d8; border-radius: 12px; background: white; box-shadow: 0 3px 12px #233a2b0b; }
 label { display: block; margin: 17px 0 7px; font-weight: 700; }
-input, textarea { width: 100%; padding: 11px 12px; border: 1px solid #9eb6a5; border-radius: 7px; color: #173126; background: #fff; font: inherit; }
+input, textarea, select { width: 100%; padding: 11px 12px; border: 1px solid #9eb6a5; border-radius: 7px; color: #173126; background: #fff; font: inherit; }
 textarea { resize: vertical; }
-input:focus, textarea:focus { outline: 2px solid #427b56; outline-offset: 2px; }
+input:focus, textarea:focus, select:focus { outline: 2px solid #427b56; outline-offset: 2px; }
+.upload-label { margin-top: 10px; }
 .hint, .privacy { color: #607267; font-size: 13px; }
 .hint { margin: 6px 0; }
 button { border: 1px solid #27553b; border-radius: 7px; padding: 10px 17px; background: #245b3d; color: white; font: inherit; font-weight: 700; cursor: pointer; }

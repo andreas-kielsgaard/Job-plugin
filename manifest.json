@@ -10,7 +10,7 @@
     "https://api.anthropic.com/*"
   ],
   "background": {
-    "scripts": ["src/ranking.js", "src/claude.js", "src/background.js"],
+    "scripts": ["src/ranking.js", "src/models.js", "src/claude.js", "src/background.js"],
     "persistent": false
   },
   "content_scripts": [{
