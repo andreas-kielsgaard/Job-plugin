@@ -68,7 +68,7 @@
     const controller = new AbortController();
     controllers.set(tabId, controller);
     try {
-      const onActivity = (text) => browser.tabs.sendMessage(tabId, { type: "JAS_ACTIVITY", text }).catch(() => {});
+      const onActivity = (text, transient = false) => browser.tabs.sendMessage(tabId, { type: "JAS_ACTIVITY", text, transient }).catch(() => {});
       const metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0, detailRequests: 0, cacheHits: 0 };
       onActivity("Finding the latest available Claude model for this type.");
       const modelType = ["haiku", "sonnet", "opus"].includes(message.model) ? message.model : JobnetModels.typeOf(data.model);

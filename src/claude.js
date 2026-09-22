@@ -105,6 +105,7 @@
     const enriched = new Array(remaining.length);
     let next = 0;
     let completed = 0;
+    let reused = 0;
     async function worker() {
       while (next < remaining.length && !signal?.aborted) {
         const index = next++;
@@ -112,17 +113,19 @@
         try {
           const detail = await readDetails(job.id);
           enriched[index] = { ...job, details: detail.text };
-          onActivity(`${detail.fromCache ? "Reused" : "Loaded"} description ${++completed} of ${remaining.length}: ${job.title}.`);
+          if (detail.fromCache) reused += 1;
+          onActivity(`Loading Jobnet descriptions: ${++completed} of ${remaining.length}.`, true);
           if (!detail.fromCache) await new Promise((resolve) => setTimeout(resolve, 150));
         } catch (error) {
           if (signal?.aborted) throw error;
           enriched[index] = { ...job, details: `Full Jobnet description unavailable: ${error.message}` };
-          onActivity(`Description unavailable ${++completed} of ${remaining.length}: ${job.title}.`);
+          onActivity(`Loading Jobnet descriptions: ${++completed} of ${remaining.length}.`, true);
         }
       }
     }
     await Promise.all(Array.from({ length: Math.min(2, remaining.length) }, worker));
     if (signal?.aborted) throw new DOMException("Stopped.", "AbortError");
+    onActivity(`Descriptions ready: ${reused} cached, ${remaining.length - reused} checked on Jobnet.`);
     onActivity(`Classifying ${remaining.length} full descriptions without CV influence.`);
     const classified = checked(await request(apiKey, model,
       `${drivers}\n\nJobnet postings with cleaned details (JSON):\n${JSON.stringify(enriched)}\n\nClassify relevance from the instruction, preferences, and job text only. An unavailable detail leaves unknown requirements potential. Provide a short scoringBrief with duties, qualifications, location and work style. Return one row per ID.`,

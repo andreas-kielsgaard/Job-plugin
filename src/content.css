@@ -7,6 +7,8 @@
 #jas-root .jas-status { margin: 0; font-weight: 600; }
 #jas-root .jas-log { overflow: auto; min-height: 42px; margin: 0; padding-left: 21px; color: #425a54; font-size: 12px; }
 #jas-root .jas-log li { margin-bottom: 5px; }
+#jas-root .jas-log summary { cursor: pointer; font-weight: 600; }
+#jas-root .jas-log ul { padding-left: 16px; margin: 6px 0; }
 #jas-root .jas-stop, #jas-root .jas-cancel, #jas-root .jas-start { border: 1px solid #315f52; border-radius: 7px; padding: 8px 12px; background: #fff; color: #214c3f; cursor: pointer; font: inherit; }
 #jas-root .jas-start { background: #245744; color: white; }
 #jas-root .jas-start:disabled { opacity: .5; cursor: not-allowed; }

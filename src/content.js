@@ -15,7 +15,12 @@
     if (message?.type === "JAS_STATUS") return Promise.resolve(status());
     if (message?.type === "JAS_LOAD_ALL") return startLoad();
     if (message?.type === "JAS_OPEN_AI") return openPrompt();
-    if (message?.type === "JAS_ACTIVITY") { log(message.text); return undefined; }
+    if (message?.type === "JAS_ACTIVITY") {
+      ensureUi();
+      setStatus(message.text);
+      if (!message.transient) log(message.text);
+      return undefined;
+    }
     return undefined;
   });
 
@@ -108,6 +113,26 @@
     ensureUi();
     const item = document.createElement("li");
     item.textContent = text;
+    logList.append(item);
+    while (logList.children.length > 80) logList.firstElementChild.remove();
+    item.scrollIntoView({ block: "nearest" });
+  }
+
+  function logBatchResults(batch, number, total) {
+    const counts = { clear: 0, potential: 0, irrelevant: 0 };
+    for (const job of batch) counts[job.grade.category] += 1;
+    const item = document.createElement("li");
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = `Batch ${number} of ${total}: ${counts.clear} clear, ${counts.potential} potential, ${counts.irrelevant} irrelevant`;
+    const list = document.createElement("ul");
+    for (const job of [...batch].sort(JobnetRanking.compare)) {
+      const entry = document.createElement("li");
+      entry.textContent = `${LABELS[job.grade.category]} · ${job.grade.score}/100 · ${job.title}: ${job.grade.reason}`;
+      list.append(entry);
+    }
+    details.append(summary, list);
+    item.append(details);
     logList.append(item);
     while (logList.children.length > 80) logList.firstElementChild.remove();
     item.scrollIntoView({ block: "nearest" });
@@ -269,9 +294,10 @@
           job.grade = JobnetRanking.normalizeGrade(grades.get(job.id));
           renderGrade(job);
           state.done += 1;
-          log(`${LABELS[job.grade.category]} · ${job.grade.score}/100 · ${job.title}: ${job.grade.reason}`);
         }
         sortJobs(jobs);
+        logBatchResults(batch, Math.floor(offset / 10) + 1, Math.ceil(jobs.length / 10));
+        setStatus(`Completed ${state.done} of ${jobs.length} cards in batches.`);
       }
       sortJobs(jobs);
       log(`Claude API: ${state.metrics.requests} requests, ${state.metrics.inputTokens + state.metrics.cacheCreationTokens + state.metrics.cacheReadTokens} input tokens, ${state.metrics.outputTokens} output tokens. Jobnet details: ${state.metrics.detailRequests} loaded, ${state.metrics.cacheHits} reused.`);
