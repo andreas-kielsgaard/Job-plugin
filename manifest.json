@@ -1,0 +1,42 @@
+{
+  "manifest_version": 2,
+  "name": "Jobnet AI Sorter",
+  "version": "0.1.0",
+  "description": "Load and rank Jobnet search results with Claude.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "https://jobnet.dk/*",
+    "https://api.anthropic.com/*"
+  ],
+  "background": {
+    "scripts": ["src/ranking.js", "src/claude.js", "src/background.js"],
+    "persistent": false
+  },
+  "content_scripts": [{
+    "matches": ["https://jobnet.dk/find-job*"],
+    "js": ["src/ranking.js", "src/content.js"],
+    "css": ["src/content.css"],
+    "run_at": "document_idle"
+  }],
+  "browser_action": {
+    "default_title": "Jobnet AI Sorter",
+    "default_popup": "popup/popup.html"
+  },
+  "options_ui": {
+    "page": "settings/settings.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "jobnet-ai-sorter@example.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["authenticationInfo", "personalCommunications", "websiteContent"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}

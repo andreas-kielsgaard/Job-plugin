@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Jobnet AI Sorter</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <main>
+    <p class="eyebrow">JOBNET.DK</p>
+    <h1>AI Sorter</h1>
+    <p id="pageStatus" role="status">Checking the current tab…</p>
+    <div class="count"><strong id="loaded">—</strong><span>cards loaded</span></div>
+    <p id="total" class="hint"></p>
+    <button id="load" type="button">Load all postings</button>
+    <button id="filter" type="button" class="primary">Filter with Claude</button>
+    <button id="settings" type="button" class="settings">Open full-page settings →</button>
+    <p class="hint">Long searches can take time. Progress and Stop appear on the Jobnet page.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

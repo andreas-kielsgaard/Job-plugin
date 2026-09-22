@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Jobnet AI Sorter settings</title><link rel="stylesheet" href="settings.css"></head>
+<body>
+  <main>
+    <header><p class="eyebrow">JOBNET AI SORTER</p><h1>Your job search context</h1><p>Claude uses these details when you start filtering a Jobnet search.</p></header>
+    <form id="settingsForm">
+      <section><h2>Claude connection</h2>
+        <label for="apiKey">Anthropic API key</label>
+        <input id="apiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
+        <p id="keyStatus" class="hint"></p>
+        <button id="deleteKey" type="button" class="text-button">Remove saved key</button>
+        <label for="model">Claude model ID</label>
+        <input id="model" type="text" spellcheck="false" required>
+        <p class="hint">Default: Claude Haiku 4.5. For a more deliberate second pass, use <code>claude-sonnet-5</code>.</p>
+      </section>
+      <section><h2>About you</h2>
+        <label for="cv">CV text</label>
+        <textarea id="cv" rows="13" maxlength="30000" placeholder="Paste your CV text here"></textarea>
+        <label for="preferences">Job preferences</label>
+        <textarea id="preferences" rows="8" maxlength="15000" placeholder="Roles, location, work style, non-negotiables, and anything else that matters"></textarea>
+      </section>
+      <div class="actions"><button type="submit">Save settings</button><span id="notice" role="status"></span></div>
+    </form>
+    <p class="privacy">Your key and text stay in Firefox extension storage until you start filtering. Then the extension sends them with posting text to Anthropic. The key is never inserted into Jobnet.</p>
+  </main>
+  <script src="settings.js"></script>
+</body>
+</html>
