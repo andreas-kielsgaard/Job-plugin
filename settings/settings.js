@@ -2,12 +2,14 @@
   "use strict";
   const form = document.getElementById("settingsForm");
   const key = document.getElementById("apiKey");
+  const jevKey = document.getElementById("jevApiKey");
   const cv = document.getElementById("cv");
   const preferences = document.getElementById("preferences");
   const model = document.getElementById("model");
   const pdfInput = document.getElementById("cvPdf");
   const pdfStatus = document.getElementById("pdfStatus");
   const keyStatus = document.getElementById("keyStatus");
+  const jevKeyStatus = document.getElementById("jevKeyStatus");
   const notice = document.getElementById("notice");
 
   load();
@@ -16,10 +18,12 @@
     event.preventDefault();
     try {
       const settings = await browser.runtime.sendMessage({ type: "JAS_SAVE_SETTINGS", settings: {
-        apiKey: key.value, cv: cv.value, preferences: preferences.value, model: model.value
+        apiKey: key.value, jevApiKey: jevKey.value, cv: cv.value, preferences: preferences.value, model: model.value
       } });
       key.value = "";
+      jevKey.value = "";
       renderKey(settings.hasApiKey);
+      renderJevKey(settings.hasJevApiKey);
       notice.textContent = "Settings saved.";
     } catch (error) {
       notice.textContent = `Could not save settings: ${error.message}`;
@@ -77,6 +81,12 @@
     renderKey(settings.hasApiKey);
     notice.textContent = "Saved key removed.";
   });
+  document.getElementById("deleteJevKey").addEventListener("click", async () => {
+    const settings = await browser.runtime.sendMessage({ type: "JAS_DELETE_JEV_KEY" });
+    jevKey.value = "";
+    renderJevKey(settings.hasJevApiKey);
+    notice.textContent = "Saved TypeSafe key removed.";
+  });
 
   async function load() {
     try {
@@ -85,6 +95,7 @@
       preferences.value = settings.preferences;
       model.value = settings.model;
       renderKey(settings.hasApiKey);
+      renderJevKey(settings.hasJevApiKey);
     } catch (error) {
       notice.textContent = `Could not load settings: ${error.message}`;
     }
@@ -93,5 +104,9 @@
   function renderKey(saved) {
     keyStatus.textContent = saved ? "A key is saved locally. Leave this field blank to keep it." : "No API key saved.";
     document.getElementById("deleteKey").disabled = !saved;
+  }
+  function renderJevKey(saved) {
+    jevKeyStatus.textContent = saved ? "A TypeSafe key is saved locally. Leave this field blank to keep it." : "No TypeSafe API key saved.";
+    document.getElementById("deleteJevKey").disabled = !saved;
   }
 })();
