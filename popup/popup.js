@@ -1,6 +1,7 @@
 (() => {
   "use strict";
   const pageStatus = document.getElementById("pageStatus");
+  document.getElementById("extensionVersion").textContent = `v${browser.runtime.getManifest().version}`;
   const loadButton = document.getElementById("load");
   const filterButton = document.getElementById("filter");
   const loaded = document.getElementById("loaded");
