@@ -4,6 +4,7 @@
   const store = browser.storage.local;
   const controllers = new Map();
   const DEFAULT_MODEL = "haiku";
+  const DEFAULT_DETAIL_LANES = 3;
   const DETAIL_CACHE_KEY = "jobDetailCache";
   const DETAIL_CACHE_AGE = 24 * 60 * 60 * 1000;
   const DETAIL_CACHE_LIMIT = 200;
@@ -23,13 +24,14 @@
   });
 
   async function getSettings() {
-    const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model"]);
+    const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model", "detailLanes"]);
     return {
       hasApiKey: Boolean(data.apiKey),
       hasJevApiKey: Boolean(data.jevApiKey),
       cv: data.cv || "",
       preferences: data.preferences || "",
-      model: JobnetModels.typeOf(data.model || DEFAULT_MODEL)
+      model: JobnetModels.typeOf(data.model || DEFAULT_MODEL),
+      detailLanes: validDetailLanes(data.detailLanes)
     };
   }
 
@@ -38,7 +40,8 @@
     const changes = {
       cv: String(settings.cv || "").slice(0, 30000),
       preferences: String(settings.preferences || "").slice(0, 15000),
-      model: JobnetModels.typeOf(settings.model || DEFAULT_MODEL)
+      model: JobnetModels.typeOf(settings.model || DEFAULT_MODEL),
+      detailLanes: validDetailLanes(settings.detailLanes)
     };
     const apiKey = String(settings.apiKey || "").trim();
     const jevApiKey = String(settings.jevApiKey || "").trim();
@@ -58,6 +61,11 @@
     return getSettings();
   }
 
+  function validDetailLanes(value) {
+    const lanes = Math.trunc(Number(value));
+    return lanes >= 1 && lanes <= 6 ? lanes : DEFAULT_DETAIL_LANES;
+  }
+
   function validSearchSender(sender) {
     return sender.tab?.id && /^https:\/\/jobnet\.dk\/find-job(?:[?#]|$)/.test(sender.url || "");
   }
@@ -67,10 +75,11 @@
     const tabId = sender.tab.id;
     if (controllers.has(tabId)) return { ok: false, error: "A filtering request is already running in this tab." };
     const provider = message.provider === "jev" ? "jev" : "claude";
-    const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model"]);
+    const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model", "detailLanes"]);
     if (!data[provider === "jev" ? "jevApiKey" : "apiKey"]) return { ok: false, error: `Save a ${provider === "jev" ? "TypeSafe Jev" : "Claude"} API key in settings first.` };
     const jobs = Array.isArray(message.jobs) ? message.jobs : [];
-    if (!jobs.length || jobs.length > 10) return { ok: false, error: "Review 1–10 Jobnet cards at a time." };
+    const maxJobs = provider === "jev" ? 50 : 10;
+    if (!jobs.length || jobs.length > maxJobs) return { ok: false, error: `Review 1–${maxJobs} Jobnet cards at a time.` };
     const ids = jobs.map((job) => String(job?.id || ""));
     if (new Set(ids).size !== ids.length || ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id))) {
       return { ok: false, error: "Invalid or duplicate Jobnet card ID." };
@@ -93,6 +102,7 @@
         cv: data.cv || "",
         preferences: data.preferences || "",
         prompt: String(message.prompt || "").slice(0, 6000),
+        detailLanes: validDetailLanes(data.detailLanes),
         jobs: jobs.map((job) => ({
           id: String(job.id),
           title: String(job.title || "").slice(0, 300),

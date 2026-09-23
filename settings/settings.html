@@ -19,6 +19,9 @@
         <input id="jevApiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
         <p id="jevKeyStatus" class="hint"></p>
         <button id="deleteJevKey" type="button" class="text-button">Remove saved TypeSafe key</button>
+        <label for="detailLanes">Parallel Jobnet detail lanes</label>
+        <select id="detailLanes" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
+        <p class="hint">Three lanes balance throughput and load on Jobnet. Detail loading continues while Jev evaluates completed state batches.</p>
         <p class="hint">Jev uses the latest model alias. It loads full descriptions and answers paired relevance and match-strength questions from state batches up to 20k estimated tokens.</p>
       </section>
       <section><h2>About you</h2>

@@ -65,56 +65,67 @@
     return Math.round(answer.score * 100 / (evaluation.LEVELS.length - 1));
   }
 
-  async function loadDetails(jobs, readDetails, onActivity, signal) {
-    const enriched = new Array(jobs.length);
+  async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, detailLanes = 3, readDetails, onActivity, onMetrics, signal }) {
+    const packer = evaluation.createPacker({ cv, preferences, prompt });
+    const grades = new Map();
+    let queryTail = Promise.resolve();
+    let queuedStates = 0;
     let next = 0;
     let completed = 0;
     let reused = 0;
+
+    function enqueue(state) {
+      const stateNumber = ++queuedStates;
+      queryTail = queryTail.then(async () => {
+        onActivity(`Jev: evaluating state ${stateNumber} with ${state.postings.length * 2} paired questions while details continue loading.`);
+        const answers = await request(apiKey, state, evaluation.buildQuestions(state), signal, onMetrics);
+        state.postings.forEach((job, index) => {
+          const group = checkedChoice(answers[`category_${index}`]);
+          const scoreAnswer = answers[`score_${index}`];
+          const probability = Math.round(100 * group.probabilities[group.choice]);
+          const confidence = Number.isFinite(scoreAnswer?.confidence) ? `; score confidence ${Math.round(100 * scoreAnswer.confidence)}%` : "";
+          grades.set(job.id, { id: job.id, ...globalThis.JobnetRanking.normalizeGrade({
+            category: group.choice,
+            score: checkedScore(scoreAnswer),
+            reason: `Jev group probability ${probability}%${confidence}.`
+          }) });
+        });
+      });
+      queryTail.catch(() => {});
+    }
+
     async function worker() {
       while (next < jobs.length && !signal?.aborted) {
         const index = next++;
         const job = jobs[index];
+        let enriched;
+        let throttle = false;
         try {
           const detail = await readDetails(job.id);
-          enriched[index] = { ...job, details: detail.text };
+          enriched = { ...job, details: detail.text };
           if (detail.fromCache) reused += 1;
-          else await pause(150, signal);
+          else throttle = true;
         } catch (error) {
           if (signal?.aborted) throw error;
-          enriched[index] = { ...job, details: `Full description unavailable: ${error.message}` };
+          enriched = { ...job, details: `Full description unavailable: ${error.message}` };
         }
-        onActivity(`Loading Jobnet descriptions: ${++completed} of ${jobs.length}.`, true);
+        const ready = packer.add(enriched);
+        if (ready) enqueue(ready);
+        onActivity(`Loading Jobnet descriptions: ${++completed} of ${jobs.length}; ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"} queued.`, true);
+        if (throttle) await pause(150, signal);
       }
     }
-    await Promise.all(Array.from({ length: Math.min(2, jobs.length) }, worker));
-    if (signal?.aborted) throw new DOMException("Stopped.", "AbortError");
-    onActivity(`Descriptions ready: ${reused} cached, ${jobs.length - reused} checked on Jobnet.`);
-    return enriched;
-  }
 
-  async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, readDetails, onActivity, onMetrics, signal }) {
-    onActivity(`Jev: loading details for ${jobs.length} postings before evaluation.`);
-    const enriched = await loadDetails(jobs, readDetails, onActivity, signal);
-    const states = evaluation.buildBatches({ cv, preferences, prompt, jobs: enriched });
-    onActivity(`Jev: built ${states.length} state ${states.length === 1 ? "batch" : "batches"}, each within 20k estimated tokens.`);
-    const grades = [];
-    for (let batchIndex = 0; batchIndex < states.length; batchIndex += 1) {
-      const state = states[batchIndex];
-      onActivity(`Jev: evaluating state ${batchIndex + 1} of ${states.length} with ${state.postings.length * 2} paired questions.`);
-      const answers = await request(apiKey, state, evaluation.buildQuestions(state), signal, onMetrics);
-      state.postings.forEach((job, index) => {
-        const group = checkedChoice(answers[`category_${index}`]);
-        const scoreAnswer = answers[`score_${index}`];
-        const probability = Math.round(100 * group.probabilities[group.choice]);
-        const confidence = Number.isFinite(scoreAnswer?.confidence) ? `; score confidence ${Math.round(100 * scoreAnswer.confidence)}%` : "";
-        grades.push({ id: job.id, ...globalThis.JobnetRanking.normalizeGrade({
-          category: group.choice,
-          score: checkedScore(scoreAnswer),
-          reason: `Jev group probability ${probability}%${confidence}.`
-        }) });
-      });
-    }
-    return grades;
+    const lanes = Math.max(1, Math.min(6, Math.trunc(Number(detailLanes)) || 3));
+    const activeLanes = Math.min(lanes, jobs.length);
+    onActivity(`Jev: loading details through ${activeLanes} parallel ${activeLanes === 1 ? "lane" : "lanes"}; evaluation starts as state batches fill.`);
+    await Promise.all(Array.from({ length: activeLanes }, worker));
+    if (signal?.aborted) throw new DOMException("Stopped.", "AbortError");
+    const final = packer.flush();
+    if (final) enqueue(final);
+    onActivity(`Descriptions ready: ${reused} cached, ${jobs.length - reused} checked on Jobnet; waiting for ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"}.`);
+    await queryTail;
+    return jobs.map((job) => grades.get(job.id));
   }
 
   globalThis.JobnetJev = { gradeBatch };

@@ -288,7 +288,7 @@
   async function filterJobs(jobs, prompt, model, provider) {
     const key = searchKey();
     const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
-    const batchSize = 10;
+    const batchSize = provider === "jev" ? 50 : 10;
     try {
       for (let offset = 0; offset < jobs.length; offset += batchSize) {
         if (state.stop) break;

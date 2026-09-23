@@ -6,6 +6,7 @@
   const cv = document.getElementById("cv");
   const preferences = document.getElementById("preferences");
   const model = document.getElementById("model");
+  const detailLanes = document.getElementById("detailLanes");
   const pdfInput = document.getElementById("cvPdf");
   const pdfStatus = document.getElementById("pdfStatus");
   const keyStatus = document.getElementById("keyStatus");
@@ -18,7 +19,8 @@
     event.preventDefault();
     try {
       const settings = await browser.runtime.sendMessage({ type: "JAS_SAVE_SETTINGS", settings: {
-        apiKey: key.value, jevApiKey: jevKey.value, cv: cv.value, preferences: preferences.value, model: model.value
+        apiKey: key.value, jevApiKey: jevKey.value, cv: cv.value, preferences: preferences.value,
+        model: model.value, detailLanes: detailLanes.value
       } });
       key.value = "";
       jevKey.value = "";
@@ -94,6 +96,7 @@
       cv.value = settings.cv;
       preferences.value = settings.preferences;
       model.value = settings.model;
+      detailLanes.value = String(settings.detailLanes);
       renderKey(settings.hasApiKey);
       renderJevKey(settings.hasJevApiKey);
     } catch (error) {

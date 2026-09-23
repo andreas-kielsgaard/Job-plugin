@@ -68,25 +68,44 @@
     return { ...item, text: `${item.text.slice(0, low)}\n[Posting shortened to fit state budget]`, truncated: true };
   }
 
-  function buildBatches({ cv, preferences, prompt, jobs, maxTokens = MAX_STATE_TOKENS }) {
+  function createPacker({ cv, preferences, prompt, maxTokens = MAX_STATE_TOKENS }) {
     const base = baseState(cv, preferences, prompt);
     if (estimateTokens(base) >= maxTokens) {
       throw new Error("CV, preferences, and search request exceed the 20k token Jev state limit.");
     }
-    const batches = [];
     let current = [];
-    for (const job of jobs) {
-      let item = posting(job);
-      if (estimateTokens({ ...base, postings: [...current, item] }) > maxTokens) {
-        if (current.length) {
-          batches.push({ ...base, postings: current });
-          current = [];
+    return {
+      add(job) {
+        let ready = null;
+        let item = posting(job);
+        if (estimateTokens({ ...base, postings: [...current, item] }) > maxTokens) {
+          if (current.length) {
+            ready = { ...base, postings: current };
+            current = [];
+          }
+          item = fitPosting(base, item, maxTokens);
         }
-        item = fitPosting(base, item, maxTokens);
+        current.push(item);
+        return ready;
+      },
+      flush() {
+        if (!current.length) return null;
+        const ready = { ...base, postings: current };
+        current = [];
+        return ready;
       }
-      current.push(item);
+    };
+  }
+
+  function buildBatches({ cv, preferences, prompt, jobs, maxTokens = MAX_STATE_TOKENS }) {
+    const packer = createPacker({ cv, preferences, prompt, maxTokens });
+    const batches = [];
+    for (const job of jobs) {
+      const ready = packer.add(job);
+      if (ready) batches.push(ready);
     }
-    if (current.length) batches.push({ ...base, postings: current });
+    const final = packer.flush();
+    if (final) batches.push(final);
     return batches;
   }
 
@@ -105,7 +124,7 @@
     ]));
   }
 
-  const exported = { MAX_STATE_TOKENS, GROUPS, LEVELS, estimateTokens, buildBatches, buildQuestions };
+  const exported = { MAX_STATE_TOKENS, GROUPS, LEVELS, estimateTokens, createPacker, buildBatches, buildQuestions };
   globalThis.JobnetJevEvaluation = exported;
   if (typeof module !== "undefined" && module.exports) module.exports = exported;
 })();
