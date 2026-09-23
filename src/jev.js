@@ -65,6 +65,13 @@
     return Math.round(answer.score * 100 / (evaluation.LEVELS.length - 1));
   }
 
+  function checkedNoul(answer) {
+    if (answer?.type !== "noul" || !Number.isFinite(answer.noul) || answer.noul < 0 || answer.noul > 1) {
+      throw new Error("TypeSafe returned an invalid contact-phone answer.");
+    }
+    return answer.noul >= 0.5;
+  }
+
   async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, detailLanes = 3, maxPostingsPerState = null, readDetails, onActivity, onMetrics, signal }) {
     const packer = evaluation.createPacker({ cv, preferences, prompt, maxPostings: maxPostingsPerState });
     const grades = new Map();
@@ -77,7 +84,7 @@
     function enqueue(state) {
       const stateNumber = ++queuedStates;
       const query = (async () => {
-        onActivity(`Jev: evaluating state ${stateNumber} with ${state.postings.length * 2} paired questions while details continue loading.`);
+        onActivity(`Jev: evaluating state ${stateNumber} with ${state.postings.length * 3} questions while details continue loading.`);
         const answers = await request(apiKey, state, evaluation.buildQuestions(state), signal, onMetrics);
         state.postings.forEach((job, index) => {
           const group = checkedChoice(answers[`category_${index}`]);
@@ -85,7 +92,8 @@
           grades.set(job.id, { id: job.id, ...globalThis.JobnetRanking.normalizeGrade({
             category: group.choice,
             score: checkedScore(scoreAnswer),
-            reason: ""
+            reason: "",
+            hasContactPhone: checkedNoul(answers[`contact_phone_${index}`])
           }) });
         });
       })();

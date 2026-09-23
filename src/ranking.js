@@ -18,7 +18,8 @@
     return {
       category: input.category,
       score,
-      reason: shortened
+      reason: shortened,
+      hasContactPhone: input.hasContactPhone === true
     };
   }
 

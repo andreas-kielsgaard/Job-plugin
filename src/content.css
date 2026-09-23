@@ -37,6 +37,7 @@
 #main-content article.jas-irrelevant .card { border-left: 7px solid #c34747; background: #fde8e7; }
 #main-content article .jas-grade { display: flex; flex-wrap: wrap; gap: 5px 12px; align-items: baseline; padding: 8px 14px; color: #193029; font: 13px/1.4 system-ui, sans-serif; }
 #main-content article .jas-grade span { color: #455a52; }
+#main-content article .jas-grade .jas-contact-phone { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid #26745d; border-radius: 50%; background: #fff; color: #17664f; font-size: 15px; line-height: 1; }
 
 #main-content #jas-page-controls { margin: 20px 0 28px; padding: 20px 22px; border: 1px solid #9cbfb1; border-left: 6px solid #087d67; border-radius: 10px; background: linear-gradient(135deg, #eef8f4, #f8fbf9); color: #173a32; box-shadow: 0 5px 16px #173d3014; font: 15px/1.4 system-ui, sans-serif; }
 #jas-page-controls .jas-page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }

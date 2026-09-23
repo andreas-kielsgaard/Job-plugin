@@ -125,6 +125,14 @@
         type: "score",
         instructions: `Score postings[${index}] using the search direction, preferences, and capability profile.`,
         criteria: LEVELS
+      }],
+      [`contact_phone_${index}`, {
+        type: "noul",
+        instructions: `Does postings[${index}] explicitly provide a phone number that a candidate can use to contact someone about this job?`,
+        criteria: {
+          true: "The posting includes a phone number for questions or contact about this role.",
+          false: "No candidate contact phone number is given, or a number shown is unrelated to contacting someone about this role."
+        }
       }]
     ]));
   }

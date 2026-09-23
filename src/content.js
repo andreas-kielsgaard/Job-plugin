@@ -479,6 +479,15 @@
     const strong = document.createElement("strong");
     strong.textContent = `${LABELS[job.grade.category]} · ${job.grade.score}/100`;
     badge.append(strong);
+    if (job.grade.hasContactPhone) {
+      const phone = document.createElement("span");
+      phone.className = "jas-contact-phone";
+      phone.setAttribute("role", "img");
+      phone.setAttribute("aria-label", "Contact phone number provided");
+      phone.title = "This posting provides a phone number for contacting someone about the job";
+      phone.textContent = "☎";
+      badge.append(phone);
+    }
     if (job.grade.reason) {
       const reason = document.createElement("span");
       reason.textContent = job.grade.reason;
