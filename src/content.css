@@ -21,11 +21,15 @@
 #jas-root .jas-dialog h2 { margin: 0; font-size: 21px; }
 #jas-root .jas-dialog p { margin: 14px 0; }
 #jas-root .jas-dialog label { display: block; margin-bottom: 6px; font-weight: 700; }
-#jas-root .jas-dialog textarea, #jas-root .jas-dialog select { width: 100%; padding: 10px; border: 1px solid #78958a; border-radius: 7px; font: inherit; background: white; color: #18302b; }
+#jas-root .jas-dialog textarea, #jas-root .jas-dialog select, #jas-root .jas-dialog input[type="number"] { width: 100%; padding: 10px; border: 1px solid #78958a; border-radius: 7px; font: inherit; background: white; color: #18302b; }
 #jas-root .jas-dialog textarea { resize: vertical; }
-#jas-root .jas-load-option { display: flex; gap: 9px; align-items: flex-start; margin-top: 16px; font-weight: 600; }
+#jas-root .jas-dialog .jas-load-option, #jas-root .jas-dialog .jas-check-option { display: flex; gap: 9px; align-items: flex-start; margin-top: 16px; font-weight: 600; }
 #jas-root .jas-load-option[hidden] { display: none; }
-#jas-root .jas-load-option input[type="checkbox"] { position: static !important; display: block !important; width: 18px !important; height: 18px !important; flex: 0 0 18px; margin: 2px 0 0 !important; opacity: 1 !important; appearance: auto !important; accent-color: #245744; }
+#jas-root .jas-load-option input[type="checkbox"], #jas-root .jas-check-option input[type="checkbox"] { position: static !important; display: block !important; width: 18px !important; height: 18px !important; flex: 0 0 18px; margin: 2px 0 0 !important; opacity: 1 !important; appearance: auto !important; accent-color: #245744; }
+#jas-root .jas-state-count { display: grid; grid-template-columns: 1fr 110px; align-items: center; gap: 12px; margin: 10px 0 0 27px; }
+#jas-root .jas-state-count[hidden] { display: none; }
+#jas-root .jas-state-count label { margin: 0; }
+#jas-root .jas-field-hint { margin: 7px 0 0 27px !important; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-note { min-height: 20px; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-actions { justify-content: flex-end; }
 #main-content article.jas-clear .card { border-left: 7px solid #24845a; background: #e7f6ec; }

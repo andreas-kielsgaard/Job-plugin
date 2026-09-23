@@ -108,6 +108,7 @@
         preferences: data.preferences || "",
         prompt: String(message.prompt || "").slice(0, 6000),
         detailLanes: validDetailLanes(data.detailLanes),
+        maxPostingsPerState: provider === "jev" ? validPostsPerState(message.postsPerState) : null,
         jobs: jobs.map((job) => ({
           id: String(job.id),
           title: String(job.title || "").slice(0, 300),
@@ -138,6 +139,11 @@
     if (!validSearchSender(sender)) return { ok: false };
     controllers.get(sender.tab.id)?.abort();
     return { ok: true };
+  }
+
+  function validPostsPerState(value) {
+    const count = Math.trunc(Number(value));
+    return count >= 1 && count <= 50 ? count : null;
   }
 
   async function cachedJobDetails(id, signal) {

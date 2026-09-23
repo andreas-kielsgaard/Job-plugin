@@ -65,8 +65,8 @@
     return Math.round(answer.score * 100 / (evaluation.LEVELS.length - 1));
   }
 
-  async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, detailLanes = 3, readDetails, onActivity, onMetrics, signal }) {
-    const packer = evaluation.createPacker({ cv, preferences, prompt });
+  async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, detailLanes = 3, maxPostingsPerState = null, readDetails, onActivity, onMetrics, signal }) {
+    const packer = evaluation.createPacker({ cv, preferences, prompt, maxPostings: maxPostingsPerState });
     const grades = new Map();
     const queryPromises = [];
     let queuedStates = 0;
@@ -117,6 +117,7 @@
 
     const lanes = Math.max(1, Math.min(6, Math.trunc(Number(detailLanes)) || 3));
     const activeLanes = Math.min(lanes, jobs.length);
+    if (maxPostingsPerState) onActivity(`Jev: limiting each state to at most ${maxPostingsPerState} posts.`);
     onActivity(`Jev: loading details through ${activeLanes} parallel ${activeLanes === 1 ? "lane" : "lanes"}; evaluation starts as state batches fill.`);
     await Promise.all(Array.from({ length: activeLanes }, worker));
     if (signal?.aborted) throw new DOMException("Stopped.", "AbortError");

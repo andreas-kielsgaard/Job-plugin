@@ -68,16 +68,21 @@
     return { ...item, text: `${item.text.slice(0, low)}\n[Posting shortened to fit state budget]`, truncated: true };
   }
 
-  function createPacker({ cv, preferences, prompt, maxTokens = MAX_STATE_TOKENS }) {
+  function createPacker({ cv, preferences, prompt, maxTokens = MAX_STATE_TOKENS, maxPostings = null }) {
     const base = baseState(cv, preferences, prompt);
     if (estimateTokens(base) >= maxTokens) {
       throw new Error("CV, preferences, and search request exceed the 20k token Jev state limit.");
     }
+    const postingLimit = Number.isInteger(maxPostings) && maxPostings > 0 ? maxPostings : Infinity;
     let current = [];
     return {
       add(job) {
         let ready = null;
         let item = posting(job);
+        if (current.length >= postingLimit) {
+          ready = { ...base, postings: current };
+          current = [];
+        }
         if (estimateTokens({ ...base, postings: [...current, item] }) > maxTokens) {
           if (current.length) {
             ready = { ...base, postings: current };
@@ -97,8 +102,8 @@
     };
   }
 
-  function buildBatches({ cv, preferences, prompt, jobs, maxTokens = MAX_STATE_TOKENS }) {
-    const packer = createPacker({ cv, preferences, prompt, maxTokens });
+  function buildBatches({ cv, preferences, prompt, jobs, maxTokens = MAX_STATE_TOKENS, maxPostings = null }) {
+    const packer = createPacker({ cv, preferences, prompt, maxTokens, maxPostings });
     const batches = [];
     for (const job of jobs) {
       const ready = packer.add(job);

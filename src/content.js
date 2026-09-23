@@ -90,6 +90,11 @@
           <select id="jas-provider"><option value="claude">Claude</option><option value="jev">TypeSafe Jev</option></select>
           <div class="jas-claude-model"><label for="jas-model">Claude model type for this run</label>
           <select id="jas-model"><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select></div>
+          <div class="jas-jev-state-strategy" hidden>
+            <label class="jas-check-option"><input id="jas-limit-state-posts" type="checkbox"> Limit the number of posts in each Jev state</label>
+            <div class="jas-state-count" hidden><label for="jas-posts-per-state">Maximum posts per state</label><input id="jas-posts-per-state" type="number" min="1" max="50" step="1" value="10"></div>
+            <p class="jas-field-hint">The 20k state limit still applies, so long descriptions can produce smaller states.</p>
+          </div>
           <label class="jas-load-option"><input id="jas-load-first" type="checkbox"> Load all remaining posts while filtering</label>
           <p class="jas-dialog-note"></p>
           <div class="jas-dialog-actions"><button class="jas-cancel" type="button">Cancel</button><button class="jas-start" type="button">Start filtering</button></div>
@@ -115,6 +120,7 @@
       promptDialog.addEventListener("click", (event) => { if (event.target === promptDialog) closePrompt(); });
       root.querySelector(".jas-start").addEventListener("click", startFilter);
       root.querySelector("#jas-provider").addEventListener("change", updateProvider);
+      root.querySelector("#jas-limit-state-posts").addEventListener("change", updateStateStrategy);
       root.querySelector(".jas-key-close").addEventListener("click", closeKeyDialog);
       root.querySelector(".jas-key-cancel").addEventListener("click", closeKeyDialog);
       keyDialog.addEventListener("click", (event) => { if (event.target === keyDialog) closeKeyDialog(); });
@@ -322,6 +328,8 @@
     const loadOption = root.querySelector(".jas-load-option");
     loadOption.hidden = !loadButton();
     root.querySelector("#jas-load-first").checked = false;
+    root.querySelector("#jas-limit-state-posts").checked = false;
+    root.querySelector("#jas-posts-per-state").value = "10";
     updateProvider();
     promptDialog.hidden = false;
     root.querySelector("#jas-prompt").focus();
@@ -331,11 +339,19 @@
   function updateProvider() {
     const jev = root.querySelector("#jas-provider").value === "jev";
     root.querySelector(".jas-claude-model").hidden = jev;
+    root.querySelector(".jas-jev-state-strategy").hidden = !jev;
+    updateStateStrategy();
     const hasKey = jev ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     root.querySelector(".jas-dialog-note").textContent = hasKey
       ? `${cards().length} loaded posts are ready to review.`
       : `${jev ? "TypeSafe Jev" : "Claude"} needs an API key. Starting will take you to settings.`;
     root.querySelector(".jas-start").disabled = !cards().length;
+  }
+
+  function updateStateStrategy() {
+    const enabled = root.querySelector("#jas-provider").value === "jev" && root.querySelector("#jas-limit-state-posts").checked;
+    root.querySelector(".jas-state-count").hidden = !enabled;
+    root.querySelector("#jas-posts-per-state").disabled = !enabled;
   }
 
   function closePrompt() {
@@ -371,6 +387,12 @@
     const hasKey = provider === "jev" ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     if (!hasKey) { openKeyDialog(provider); return; }
     if (!prompt) { root.querySelector(".jas-dialog-note").textContent = "Enter an instruction for this run."; return; }
+    const limitStatePosts = provider === "jev" && root.querySelector("#jas-limit-state-posts").checked;
+    const postsPerState = Math.trunc(Number(root.querySelector("#jas-posts-per-state").value));
+    if (limitStatePosts && (postsPerState < 1 || postsPerState > 50)) {
+      root.querySelector(".jas-dialog-note").textContent = "Choose 1–50 posts per Jev state.";
+      return;
+    }
     const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
     closePrompt();
     const jobs = cards();
@@ -379,11 +401,11 @@
       job.article.querySelector(".jas-grade")?.remove();
     }
     setRunning("reviewing", loadRemaining ? advertisedTotal() || jobs.length : jobs.length);
-    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${loadRemaining ? " while Jobnet continues loading" : ""}.`);
-    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining));
+    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${limitStatePosts ? ` with at most ${postsPerState} posts per state` : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
+    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining, limitStatePosts ? postsPerState : null));
   }
 
-  async function filterJobs(prompt, model, provider, loadRemaining) {
+  async function filterJobs(prompt, model, provider, loadRemaining, postsPerState) {
     const key = searchKey();
     const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
     const batchSize = provider === "jev" ? 50 : 10;
@@ -414,7 +436,7 @@
         batchNumber += 1;
         setStatus(`Reviewing ${batch.length} posts with ${name}; ${state.done} completed${loadingDone ? "" : `, ${cards().length} loaded so far`}.`);
         log(state.message);
-        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider,
+        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider, postsPerState,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url })) });
         if (state.stop) break;
         if (!response?.ok) throw new Error(response?.error || `${name} did not return grades.`);
