@@ -7,8 +7,11 @@ h1 small { color: #63766b; font-size: 11px; font-weight: 600; }
 #pageStatus { min-height: 38px; margin: 0 0 12px; }
 .count { display: flex; gap: 7px; align-items: baseline; padding: 12px; border-radius: 9px; background: #e5f0e9; }
 .count strong { font-size: 25px; }
-button { display: block; width: 100%; margin-top: 9px; padding: 10px; border: 1px solid #2c5b46; border-radius: 8px; background: white; color: #214d39; font: inherit; font-weight: 700; cursor: pointer; }
+button { display: block; width: 100%; margin-top: 9px; padding: 10px; border: 1px solid #2c5b46; border-radius: 8px; background: white; color: #214d39; font: inherit; font-weight: 700; cursor: pointer; transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease; }
+button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 10px #173d3030; }
+button:not(:disabled):active { transform: scale(.97); box-shadow: none; }
 button.primary { background: #245d43; color: white; }
 button.settings { border: none; background: transparent; text-align: left; padding-left: 0; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .hint { color: #63766b; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }

@@ -68,7 +68,7 @@
   async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, detailLanes = 3, readDetails, onActivity, onMetrics, signal }) {
     const packer = evaluation.createPacker({ cv, preferences, prompt });
     const grades = new Map();
-    let queryTail = Promise.resolve();
+    const queryPromises = [];
     let queuedStates = 0;
     let next = 0;
     let completed = 0;
@@ -76,22 +76,21 @@
 
     function enqueue(state) {
       const stateNumber = ++queuedStates;
-      queryTail = queryTail.then(async () => {
+      const query = (async () => {
         onActivity(`Jev: evaluating state ${stateNumber} with ${state.postings.length * 2} paired questions while details continue loading.`);
         const answers = await request(apiKey, state, evaluation.buildQuestions(state), signal, onMetrics);
         state.postings.forEach((job, index) => {
           const group = checkedChoice(answers[`category_${index}`]);
           const scoreAnswer = answers[`score_${index}`];
-          const probability = Math.round(100 * group.probabilities[group.choice]);
-          const confidence = Number.isFinite(scoreAnswer?.confidence) ? `; score confidence ${Math.round(100 * scoreAnswer.confidence)}%` : "";
           grades.set(job.id, { id: job.id, ...globalThis.JobnetRanking.normalizeGrade({
             category: group.choice,
             score: checkedScore(scoreAnswer),
-            reason: `Jev group probability ${probability}%${confidence}.`
+            reason: ""
           }) });
         });
-      });
-      queryTail.catch(() => {});
+      })();
+      query.catch(() => {});
+      queryPromises.push(query);
     }
 
     async function worker() {
@@ -124,7 +123,7 @@
     const final = packer.flush();
     if (final) enqueue(final);
     onActivity(`Descriptions ready: ${reused} cached, ${jobs.length - reused} checked on Jobnet; waiting for ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"}.`);
-    await queryTail;
+    await Promise.all(queryPromises);
     return jobs.map((job) => grades.get(job.id));
   }
 

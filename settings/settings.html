@@ -3,18 +3,17 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Jobnet AI Sorter settings</title><link rel="stylesheet" href="settings.css"></head>
 <body>
   <main>
-    <header><p class="eyebrow">JOBNET AI SORTER</p><h1>Your job search context</h1><p>The provider you choose uses these details when you filter a Jobnet search.</p></header>
+    <header><p class="eyebrow">JOBNET AI SORTER</p></header>
     <form id="settingsForm">
-      <section><h2>Claude connection</h2>
+      <section id="claude-settings"><h2>Claude connection</h2>
         <label for="apiKey">Anthropic API key</label>
         <input id="apiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
         <p id="keyStatus" class="hint"></p>
         <button id="deleteKey" type="button" class="text-button">Remove saved key</button>
         <label for="model">Claude model type</label>
         <select id="model" required><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
-        <p class="hint">The latest available version of this type is selected when filtering starts. Haiku is the fastest and least expensive.</p>
       </section>
-      <section><h2>TypeSafe Jev connection</h2>
+      <section id="jev-settings"><h2>TypeSafe Jev connection</h2>
         <label for="jevApiKey">TypeSafe API key</label>
         <input id="jevApiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
         <p id="jevKeyStatus" class="hint"></p>
@@ -22,7 +21,6 @@
         <label for="detailLanes">Parallel Jobnet detail lanes</label>
         <select id="detailLanes" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
         <p class="hint">Three lanes balance throughput and load on Jobnet. Detail loading continues while Jev evaluates completed state batches.</p>
-        <p class="hint">Jev uses the latest model alias. It loads full descriptions and answers paired relevance and match-strength questions from state batches up to 20k estimated tokens.</p>
       </section>
       <section><h2>About you</h2>
         <label for="cv">CV text</label>
@@ -36,7 +34,6 @@
       </section>
       <div class="actions"><button type="submit">Save settings</button><span id="notice" role="status"></span></div>
     </form>
-    <p class="privacy">Keys and text stay in Firefox extension storage until filtering starts. The chosen provider receives the instruction, preferences and posting text; it receives CV text for qualification scoring. Keys are never inserted into Jobnet.</p>
   </main>
   <script src="settings.js"></script>
 </body>

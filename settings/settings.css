@@ -2,8 +2,7 @@
 body { margin: 0; background: #f4f7f3; color: #1c332c; font: 16px/1.5 system-ui, sans-serif; }
 main { width: min(820px, calc(100% - 36px)); margin: 42px auto 70px; }
 header { margin-bottom: 28px; }
-.eyebrow { color: #4d7860; font-size: 12px; font-weight: 800; letter-spacing: .13em; }
-h1 { margin: 0; font-size: clamp(30px, 5vw, 42px); }
+.eyebrow { margin: 0; color: #376e50; font-size: clamp(28px, 6vw, 44px); font-weight: 900; letter-spacing: .06em; line-height: 1.05; }
 h2 { margin: 0 0 18px; font-size: 21px; }
 section { margin-bottom: 18px; padding: 25px; border: 1px solid #d6e2d8; border-radius: 12px; background: white; box-shadow: 0 3px 12px #233a2b0b; }
 label { display: block; margin: 17px 0 7px; font-weight: 700; }
@@ -14,6 +13,15 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #427b56; outline-
 .hint, .privacy { color: #607267; font-size: 13px; }
 .hint { margin: 6px 0; }
 button { border: 1px solid #27553b; border-radius: 7px; padding: 10px 17px; background: #245b3d; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+button { transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease; }
+button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 10px #173d3030; }
+button:not(:disabled):active { transform: scale(.97); box-shadow: none; }
+button:disabled { opacity: .5; cursor: not-allowed; }
 .text-button { margin: 5px 0 9px; padding: 0; border: 0; background: transparent; color: #7c3434; font-size: 13px; }
 .actions { display: flex; gap: 16px; align-items: center; }
 #notice { color: #245b3d; }
+#notice.jas-saved { animation: savedPulse 360ms ease; }
+.settings-attention { animation: settingsAttention 2.5s ease; }
+@keyframes savedPulse { 0% { opacity: 0; transform: translateY(3px); } 100% { opacity: 1; transform: none; } }
+@keyframes settingsAttention { 0%, 100% { box-shadow: none; } 18%, 70% { box-shadow: 0 0 0 5px #e6ad3970; border-color: #a66c00; } }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } #notice.jas-saved, .settings-attention { animation: none; } }

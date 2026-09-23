@@ -5,10 +5,8 @@
   const controllers = new Map();
   const DEFAULT_MODEL = "haiku";
   const DEFAULT_DETAIL_LANES = 3;
-  const DETAIL_CACHE_KEY = "jobDetailCache";
-  const DETAIL_CACHE_AGE = 24 * 60 * 60 * 1000;
-  const DETAIL_CACHE_LIMIT = 200;
-  let cacheWrites = Promise.resolve();
+  const DETAIL_CACHE_PREFIX = "jobDetail:";
+  const DETAIL_CACHE_AGE = 7 * 24 * 60 * 60 * 1000;
 
   browser.runtime.onMessage.addListener((message, sender) => {
     if (!message || typeof message !== "object") return undefined;
@@ -18,6 +16,7 @@
     if (message.type === "JAS_SAVE_SETTINGS") return saveSettings(message.settings);
     if (message.type === "JAS_DELETE_KEY") return deleteKey();
     if (message.type === "JAS_DELETE_JEV_KEY") return deleteJevKey();
+    if (message.type === "JAS_OPEN_SETTINGS") return openSettings(message.section);
     if (message.type === "JAS_GRADE_BATCH") return gradeBatch(message, sender);
     if (message.type === "JAS_CANCEL") return cancel(sender);
     return undefined;
@@ -59,6 +58,12 @@
   async function deleteJevKey() {
     await store.remove("jevApiKey");
     return getSettings();
+  }
+
+  async function openSettings(section) {
+    const target = section === "jev-settings" ? "jev-settings" : "claude-settings";
+    await browser.tabs.create({ url: browser.runtime.getURL(`settings/settings.html#${target}`) });
+    return { ok: true };
   }
 
   function validDetailLanes(value) {
@@ -137,24 +142,16 @@
 
   async function cachedJobDetails(id, signal) {
     if (signal.aborted) throw new DOMException("Stopped.", "AbortError");
+    const cacheKey = `${DETAIL_CACHE_PREFIX}${id}`;
     try {
-      const cache = (await store.get(DETAIL_CACHE_KEY))[DETAIL_CACHE_KEY] || {};
-      const item = cache[id];
+      const item = (await store.get(cacheKey))[cacheKey];
       if (item && typeof item.text === "string" && Date.now() - item.at < DETAIL_CACHE_AGE) {
         return { text: item.text, fromCache: true };
       }
+      if (item) await store.remove(cacheKey);
     } catch (_) { /* Cache read failure must not block a Jobnet detail request. */ }
     const text = await readJobDetails(id, signal);
-    cacheWrites = cacheWrites.catch(() => {}).then(async () => {
-      const cache = (await store.get(DETAIL_CACHE_KEY))[DETAIL_CACHE_KEY] || {};
-      const now = Date.now();
-      const entries = Object.entries(cache)
-        .filter(([key, item]) => key !== id && typeof item?.text === "string" && now - item.at < DETAIL_CACHE_AGE)
-        .sort((a, b) => a[1].at - b[1].at);
-      entries.push([id, { text, at: now }]);
-      await store.set({ [DETAIL_CACHE_KEY]: Object.fromEntries(entries.slice(-DETAIL_CACHE_LIMIT)) });
-    });
-    await cacheWrites.catch(() => {});
+    await store.set({ [cacheKey]: { text, at: Date.now() } }).catch(() => {});
     return { text, fromCache: false };
   }
 

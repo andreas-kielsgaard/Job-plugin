@@ -10,6 +10,8 @@
   let statusText;
   let stopButton;
   let promptDialog;
+  let keyDialog;
+  let pageControls;
   let availableKeys = { hasApiKey: false, hasJevApiKey: false };
 
   browser.runtime.onMessage.addListener((message) => {
@@ -43,8 +45,12 @@
   }
 
   function searchKey() {
-    const search = document.querySelector('#main-content input[name="searchString"]')?.value || "";
+    const search = searchInput()?.value || "";
     return `${location.href}|${search}`;
+  }
+
+  function searchInput() {
+    return document.querySelector('#main-content input[name="searchString"], #main-content input[role="combobox"], #main-content input');
   }
 
   function advertisedTotal() {
@@ -64,10 +70,10 @@
   }
 
   function ensureUi() {
-    if (root?.isConnected) return;
-    root = document.createElement("div");
-    root.id = "jas-root";
-    root.innerHTML = `
+    if (!root?.isConnected) {
+      root = document.createElement("div");
+      root.id = "jas-root";
+      root.innerHTML = `
       <aside class="jas-panel" aria-label="Jobnet AI Sorter activity">
         <div class="jas-panel-head"><strong>Jobnet AI Sorter</strong><button class="jas-minimize" type="button" aria-label="Minimize activity">−</button></div>
         <p class="jas-status" role="status"></p>
@@ -76,7 +82,7 @@
       </aside>
       <div class="jas-overlay" hidden>
         <section class="jas-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-dialog-title">
-          <div class="jas-dialog-head"><h2 id="jas-dialog-title">Filter this search with AI</h2><button class="jas-close" type="button" aria-label="Close">×</button></div>
+          <div class="jas-dialog-head"><h2 id="jas-dialog-title">Filter loaded posts with AI</h2><button class="jas-close" type="button" aria-label="Close">×</button></div>
           <p>Your instruction and saved preferences guide relevance. Your CV helps score qualifications and becomes a relevance fallback when no other job preference is provided. Jev loads full descriptions and evaluates paired category and score questions together.</p>
           <label for="jas-prompt">What should the model prioritize for this search?</label>
           <textarea id="jas-prompt" rows="5" maxlength="6000" placeholder="For example: prioritize senior roles in Copenhagen with flexible work; avoid sales positions."></textarea>
@@ -84,34 +90,84 @@
           <select id="jas-provider"><option value="claude">Claude</option><option value="jev">TypeSafe Jev</option></select>
           <div class="jas-claude-model"><label for="jas-model">Claude model type for this run</label>
           <select id="jas-model"><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select></div>
+          <label class="jas-load-option"><input id="jas-load-first" type="checkbox"> Load all remaining posts while filtering</label>
           <p class="jas-dialog-note"></p>
           <div class="jas-dialog-actions"><button class="jas-cancel" type="button">Cancel</button><button class="jas-start" type="button">Start filtering</button></div>
         </section>
+      </div>
+      <div class="jas-key-overlay" hidden>
+        <section class="jas-dialog jas-key-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-key-title">
+          <div class="jas-dialog-head"><h2 id="jas-key-title">API key required</h2><button class="jas-key-close" type="button" aria-label="Close">×</button></div>
+          <p class="jas-key-message"></p>
+          <div class="jas-dialog-actions"><button class="jas-key-cancel" type="button">Cancel</button><button class="jas-key-settings" type="button">Take me to settings</button></div>
+        </section>
       </div>`;
-    document.body.append(root);
-    root.querySelector(".jas-panel-head strong").append(` · v${browser.runtime.getManifest().version}`);
-    logList = root.querySelector(".jas-log");
-    statusText = root.querySelector(".jas-status");
-    stopButton = root.querySelector(".jas-stop");
-    promptDialog = root.querySelector(".jas-overlay");
-    root.querySelector(".jas-minimize").addEventListener("click", () => root.querySelector(".jas-panel").classList.toggle("jas-collapsed"));
-    root.querySelector(".jas-close").addEventListener("click", closePrompt);
-    root.querySelector(".jas-cancel").addEventListener("click", closePrompt);
-    promptDialog.addEventListener("click", (event) => { if (event.target === promptDialog) closePrompt(); });
-    root.querySelector(".jas-start").addEventListener("click", startFilter);
-    root.querySelector("#jas-provider").addEventListener("change", updateProvider);
-    stopButton.addEventListener("click", () => {
-      state.stop = true;
-      setStatus("Stopping after the current step…");
-      browser.runtime.sendMessage({ type: "JAS_CANCEL" }).catch(() => {});
-    });
-    root.addEventListener("keydown", (event) => { if (event.key === "Escape" && !promptDialog.hidden) closePrompt(); });
-    setStatus(state.message);
+      document.body.append(root);
+      root.querySelector(".jas-panel-head strong").append(` · v${browser.runtime.getManifest().version}`);
+      logList = root.querySelector(".jas-log");
+      statusText = root.querySelector(".jas-status");
+      stopButton = root.querySelector(".jas-stop");
+      promptDialog = root.querySelector(".jas-overlay");
+      keyDialog = root.querySelector(".jas-key-overlay");
+      root.querySelector(".jas-minimize").addEventListener("click", () => root.querySelector(".jas-panel").classList.toggle("jas-collapsed"));
+      root.querySelector(".jas-close").addEventListener("click", closePrompt);
+      root.querySelector(".jas-cancel").addEventListener("click", closePrompt);
+      promptDialog.addEventListener("click", (event) => { if (event.target === promptDialog) closePrompt(); });
+      root.querySelector(".jas-start").addEventListener("click", startFilter);
+      root.querySelector("#jas-provider").addEventListener("change", updateProvider);
+      root.querySelector(".jas-key-close").addEventListener("click", closeKeyDialog);
+      root.querySelector(".jas-key-cancel").addEventListener("click", closeKeyDialog);
+      keyDialog.addEventListener("click", (event) => { if (event.target === keyDialog) closeKeyDialog(); });
+      root.querySelector(".jas-key-settings").addEventListener("click", openKeySettings);
+      stopButton.addEventListener("click", () => {
+        state.stop = true;
+        setStatus("Stopping after the current step…");
+        browser.runtime.sendMessage({ type: "JAS_CANCEL" }).catch(() => {});
+      });
+      root.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (!keyDialog.hidden) closeKeyDialog();
+        else if (!promptDialog.hidden) closePrompt();
+      });
+      setStatus(state.message);
+    }
+    ensurePageControls();
+  }
+
+  function ensurePageControls() {
+    if (!pageControls) {
+      pageControls = document.createElement("section");
+      pageControls.id = "jas-page-controls";
+      pageControls.setAttribute("aria-label", "Jobnet AI Sorter controls");
+      pageControls.innerHTML = `
+        <div class="jas-page-heading"><div><span>JOBNET AI SORTER</span><strong>Search assistant</strong></div><small>v${browser.runtime.getManifest().version}</small></div>
+        <p class="jas-page-summary"></p>
+        <div class="jas-page-actions"><button class="jas-page-load" type="button">Load all posts</button><button class="jas-page-filter" type="button">Filter loaded posts with AI</button><button class="jas-page-settings" type="button">Settings</button></div>`;
+      pageControls.querySelector(".jas-page-load").addEventListener("click", startLoad);
+      pageControls.querySelector(".jas-page-filter").addEventListener("click", openPrompt);
+      pageControls.querySelector(".jas-page-settings").addEventListener("click", () => browser.runtime.openOptionsPage());
+    }
+    const main = document.querySelector("#main-content");
+    const searchButton = [...document.querySelectorAll("#main-content button")].find((button) => button.textContent.trim() === "Søg");
+    let searchRow = searchInput() || searchButton || main?.querySelector("h1")?.nextElementSibling;
+    while (searchRow?.parentElement && searchRow.parentElement !== main) searchRow = searchRow.parentElement;
+    if (searchRow && pageControls.previousElementSibling !== searchRow) searchRow.after(pageControls);
+    updatePageControls();
+  }
+
+  function updatePageControls() {
+    if (!pageControls?.isConnected) return;
+    const loaded = cards().length;
+    const total = advertisedTotal();
+    pageControls.querySelector(".jas-page-summary").textContent = state.operation ? state.message : `${loaded} posts loaded${total ? ` of ${total.toLocaleString()}` : ""}.`;
+    pageControls.querySelector(".jas-page-load").disabled = Boolean(state.operation) || !loaded || !loadButton();
+    pageControls.querySelector(".jas-page-filter").disabled = Boolean(state.operation) || !loaded;
   }
 
   function setStatus(text) {
     state.message = text;
     if (statusText) statusText.textContent = text;
+    updatePageControls();
   }
 
   function log(text) {
@@ -129,11 +185,11 @@
     const item = document.createElement("li");
     const details = document.createElement("details");
     const summary = document.createElement("summary");
-    summary.textContent = `Batch ${number} of ${total}: ${counts.clear} clear, ${counts.potential} potential, ${counts.irrelevant} irrelevant`;
+    summary.textContent = `Batch ${number}${total ? ` of ${total}` : ""}: ${counts.clear} clear, ${counts.potential} potential, ${counts.irrelevant} irrelevant`;
     const list = document.createElement("ul");
     for (const job of [...batch].sort(JobnetRanking.compare)) {
       const entry = document.createElement("li");
-      entry.textContent = `${LABELS[job.grade.category]} · ${job.grade.score}/100 · ${job.title}: ${job.grade.reason}`;
+      entry.textContent = `${LABELS[job.grade.category]} · ${job.grade.score}/100 · ${job.title}${job.grade.reason ? `: ${job.grade.reason}` : ""}`;
       list.append(entry);
     }
     details.append(summary, list);
@@ -153,6 +209,7 @@
     state.metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0, detailRequests: 0, cacheHits: 0 };
     stopButton.hidden = false;
     root.querySelector(".jas-panel").classList.remove("jas-collapsed");
+    updatePageControls();
   }
 
   function finish(phase, text) {
@@ -169,46 +226,53 @@
     const total = advertisedTotal();
     setRunning("loading", total || 0);
     log(`Loading this search: ${cards().length}${total ? ` of ${total}` : ""} cards currently visible.`);
-    state.operation = Promise.resolve().then(loadAll);
+    state.operation = Promise.resolve().then(loadAllStandalone);
     return Promise.resolve({ ok: true });
   }
 
-  async function loadAll() {
+  async function loadAllStandalone() {
     const key = searchKey();
-    let failures = 0;
     try {
-      while (!state.stop) {
-        if (searchKey() !== key) throw new Error("The search changed while loading. Start again for the new search.");
-        const button = loadButton();
-        if (!button) {
-          const loaded = cards().length;
-          if (state.total && loaded < state.total) throw new Error(`Jobnet stopped offering more cards at ${loaded} of ${state.total} advertised results.`);
-          finish("done", `All available cards loaded: ${loaded}.`);
-          return;
-        }
-        if (button.getAttribute("aria-disabled") === "true") {
-          await waitForReady(key);
-          continue;
-        }
-        const before = cards().length;
-        button.click();
-        const grew = await waitForMore(before, key);
-        if (state.stop) break;
-        if (!grew) {
-          failures += 1;
-          log(`Jobnet did not add cards; retry ${failures} of 3.`);
-          if (failures >= 3) throw new Error("Jobnet stopped adding cards. Reload or narrow the search and try again.");
-          continue;
-        }
-        failures = 0;
-        state.done = cards().length;
-        setStatus(`Loaded ${state.done}${state.total ? ` of ${state.total}` : ""} cards…`);
-        log(state.message);
-      }
-      finish("stopped", `Stopped with ${cards().length} cards loaded.`);
+      const loaded = await loadAllCards(key);
+      finish(state.stop ? "stopped" : "done", state.stop ? `Stopped with ${loaded} cards loaded.` : `All available cards loaded: ${loaded}.`);
     } catch (error) {
       finish("error", error.message);
     }
+  }
+
+  async function loadAllCards(key, { combined = false } = {}) {
+    let failures = 0;
+    while (!state.stop) {
+      if (searchKey() !== key) throw new Error("The search changed while loading. Start again for the new search.");
+      const button = loadButton();
+      if (!button) {
+        const loaded = cards().length;
+        if (state.total && loaded < state.total) throw new Error(`Jobnet stopped offering more cards at ${loaded} of ${state.total} advertised results.`);
+        return loaded;
+      }
+      if (button.getAttribute("aria-disabled") === "true") {
+        await waitForReady(key);
+        continue;
+      }
+      const before = cards().length;
+      button.click();
+      const grew = await waitForMore(before, key);
+      if (state.stop) break;
+      if (!grew) {
+        failures += 1;
+        log(`Jobnet did not add cards; retry ${failures} of 3.`);
+        if (failures >= 3) throw new Error("Jobnet stopped adding cards. Reload or narrow the search and try again.");
+        continue;
+      }
+      failures = 0;
+      const loaded = cards().length;
+      if (!combined) state.done = loaded;
+      setStatus(combined
+        ? `Reviewing loaded posts while Jobnet continues loading: ${loaded}${state.total ? ` of ${state.total}` : ""} available.`
+        : `Loaded ${loaded}${state.total ? ` of ${state.total}` : ""} cards…`);
+      log(state.message);
+    }
+    return cards().length;
   }
 
   function waitForMore(before, key) {
@@ -248,7 +312,16 @@
       browser.runtime.sendMessage({ type: "JAS_GET_MODEL_TYPE" })
     ]);
     availableKeys = settings;
+    if (!availableKeys.hasApiKey && !availableKeys.hasJevApiKey) {
+      openKeyDialog();
+      return { ok: true };
+    }
+    if (availableKeys.hasJevApiKey && !availableKeys.hasApiKey) root.querySelector("#jas-provider").value = "jev";
+    if (availableKeys.hasApiKey && !availableKeys.hasJevApiKey) root.querySelector("#jas-provider").value = "claude";
     root.querySelector("#jas-model").value = modelSettings.model;
+    const loadOption = root.querySelector(".jas-load-option");
+    loadOption.hidden = !loadButton();
+    root.querySelector("#jas-load-first").checked = false;
     updateProvider();
     promptDialog.hidden = false;
     root.querySelector("#jas-prompt").focus();
@@ -260,41 +333,86 @@
     root.querySelector(".jas-claude-model").hidden = jev;
     const hasKey = jev ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     root.querySelector(".jas-dialog-note").textContent = hasKey
-      ? `${cards().length} loaded cards. ${jev ? "Jev loads full descriptions, builds state batches up to 20k estimated tokens, and evaluates category and score together" : "Claude screens cards in batches, then reads promising Jobnet descriptions"}.`
-      : `Save a ${jev ? "TypeSafe Jev" : "Claude"} API key in the full-page settings first.`;
-    root.querySelector(".jas-start").disabled = !hasKey || !cards().length;
+      ? `${cards().length} loaded posts are ready to review.`
+      : `${jev ? "TypeSafe Jev" : "Claude"} needs an API key. Starting will take you to settings.`;
+    root.querySelector(".jas-start").disabled = !cards().length;
   }
 
   function closePrompt() {
     promptDialog.hidden = true;
   }
 
+  function openKeyDialog(provider = null) {
+    ensureUi();
+    const providerName = provider === "jev" ? "TypeSafe Jev" : "Claude";
+    keyDialog.dataset.section = provider === "jev" ? "jev-settings" : "claude-settings";
+    root.querySelector("#jas-key-title").textContent = provider ? `${providerName} API key required` : "Configure an AI provider";
+    root.querySelector(".jas-key-message").textContent = provider
+      ? `A ${providerName} API key is not configured. Add it in settings before filtering.`
+      : "No Claude or TypeSafe Jev API key is configured. Add one in settings before filtering.";
+    promptDialog.hidden = true;
+    keyDialog.hidden = false;
+    root.querySelector(".jas-key-settings").focus();
+  }
+
+  function closeKeyDialog() {
+    keyDialog.hidden = true;
+  }
+
+  async function openKeySettings() {
+    const response = await browser.runtime.sendMessage({ type: "JAS_OPEN_SETTINGS", section: keyDialog.dataset.section });
+    if (response?.ok) closeKeyDialog();
+  }
+
   function startFilter() {
     const prompt = root.querySelector("#jas-prompt").value.trim();
     const model = root.querySelector("#jas-model").value;
     const provider = root.querySelector("#jas-provider").value;
+    const hasKey = provider === "jev" ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
+    if (!hasKey) { openKeyDialog(provider); return; }
     if (!prompt) { root.querySelector(".jas-dialog-note").textContent = "Enter an instruction for this run."; return; }
+    const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
     closePrompt();
     const jobs = cards();
     for (const job of jobs) {
       job.article.classList.remove("jas-clear", "jas-potential", "jas-irrelevant");
       job.article.querySelector(".jas-grade")?.remove();
     }
-    setRunning("reviewing", jobs.length);
-    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded cards.`);
-    state.operation = Promise.resolve().then(() => filterJobs(jobs, prompt, model, provider));
+    setRunning("reviewing", loadRemaining ? advertisedTotal() || jobs.length : jobs.length);
+    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${loadRemaining ? " while Jobnet continues loading" : ""}.`);
+    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining));
   }
 
-  async function filterJobs(jobs, prompt, model, provider) {
+  async function filterJobs(prompt, model, provider, loadRemaining) {
     const key = searchKey();
     const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
     const batchSize = provider === "jev" ? 50 : 10;
+    const jobsById = new Map();
+    const processed = new Set();
+    let loadingDone = !loadRemaining;
+    let loadingError = null;
+    let batchNumber = 0;
+    const loadPromise = loadRemaining
+      ? loadAllCards(key, { combined: true }).catch((error) => { loadingError = error; }).finally(() => { loadingDone = true; })
+      : Promise.resolve();
     try {
-      for (let offset = 0; offset < jobs.length; offset += batchSize) {
-        if (state.stop) break;
-        const batch = jobs.slice(offset, offset + batchSize);
-        if (searchKey() !== key || batch.some((job) => !job.article.isConnected)) throw new Error("The search changed during filtering. Start again for the new search.");
-        setStatus(`Reviewing cards ${offset + 1}–${offset + batch.length} of ${jobs.length} with ${name}.`);
+      while (!state.stop) {
+        if (searchKey() !== key) throw new Error("The search changed during filtering. Start again for the new search.");
+        for (const job of cards()) {
+          const saved = jobsById.get(job.id);
+          if (saved) Object.assign(saved, { article: job.article, index: job.index, title: job.title, summary: job.summary, url: job.url });
+          else jobsById.set(job.id, job);
+        }
+        const available = [...jobsById.values()].filter((job) => !processed.has(job.id));
+        if (!available.length) {
+          if (loadingDone) break;
+          await delay(250);
+          continue;
+        }
+        const batch = available.slice(0, batchSize);
+        batch.forEach((job) => processed.add(job.id));
+        batchNumber += 1;
+        setStatus(`Reviewing ${batch.length} posts with ${name}; ${state.done} completed${loadingDone ? "" : `, ${cards().length} loaded so far`}.`);
         log(state.message);
         const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url })) });
@@ -310,17 +428,26 @@
           renderGrade(job);
           state.done += 1;
         }
-        sortJobs(jobs);
-        logBatchResults(batch, Math.floor(offset / batchSize) + 1, Math.ceil(jobs.length / batchSize));
-        setStatus(`Completed ${state.done} of ${jobs.length} cards in batches.`);
+        if (!loadRemaining) sortJobs([...jobsById.values()]);
+        logBatchResults(batch, batchNumber, loadRemaining ? null : Math.ceil(jobsById.size / batchSize));
+        setStatus(`Completed ${state.done} of ${jobsById.size} loaded posts${loadingDone ? "." : "; Jobnet is still loading."}`);
       }
+      await loadPromise;
+      if (loadingError) throw loadingError;
+      const jobs = [...jobsById.values()];
       sortJobs(jobs);
       log(`${name} API: ${state.metrics.requests} requests, ${state.metrics.inputTokens + state.metrics.cacheCreationTokens + state.metrics.cacheReadTokens} input tokens, ${state.metrics.outputTokens} output tokens. Jobnet details: ${state.metrics.detailRequests} loaded, ${state.metrics.cacheHits} reused.`);
       finish(state.stop ? "stopped" : "done", `${state.stop ? "Stopped" : "Finished"}: ${state.done} of ${jobs.length} cards reviewed and sorted.`);
     } catch (error) {
-      sortJobs(jobs);
+      state.stop = true;
+      await loadPromise;
+      sortJobs([...jobsById.values()]);
       finish("error", `Paused after ${state.done} cards: ${error.message}`);
     }
+  }
+
+  function delay(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
   function renderGrade(job) {
@@ -329,9 +456,12 @@
     badge.className = "jas-grade";
     const strong = document.createElement("strong");
     strong.textContent = `${LABELS[job.grade.category]} · ${job.grade.score}/100`;
-    const reason = document.createElement("span");
-    reason.textContent = job.grade.reason;
-    badge.append(strong, reason);
+    badge.append(strong);
+    if (job.grade.reason) {
+      const reason = document.createElement("span");
+      reason.textContent = job.grade.reason;
+      badge.append(reason);
+    }
     job.article.querySelector(".card")?.prepend(badge);
   }
 
@@ -340,4 +470,12 @@
     if (!parent || jobs.some((job) => job.article.parentElement !== parent)) return;
     for (const job of [...jobs].sort(JobnetRanking.compare)) parent.append(job.article);
   }
+
+  ensureUi();
+  const pageObserver = new MutationObserver((mutations) => {
+    if (!pageControls?.isConnected) ensurePageControls();
+    else if (mutations.some((mutation) => !pageControls.contains(mutation.target))) updatePageControls();
+  });
+  pageObserver.observe(document.body, { childList: true, subtree: true });
+  ensurePageControls();
 })();

@@ -12,8 +12,10 @@
   const keyStatus = document.getElementById("keyStatus");
   const jevKeyStatus = document.getElementById("jevKeyStatus");
   const notice = document.getElementById("notice");
+  let noticeTimer;
 
-  load();
+  load().finally(focusRequestedField);
+  window.addEventListener("hashchange", focusRequestedField);
   pdfInput.addEventListener("change", importPdf);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -26,8 +28,10 @@
       jevKey.value = "";
       renderKey(settings.hasApiKey);
       renderJevKey(settings.hasJevApiKey);
-      notice.textContent = "Settings saved.";
+      showSaved();
     } catch (error) {
+      clearTimeout(noticeTimer);
+      notice.classList.remove("jas-saved");
       notice.textContent = `Could not save settings: ${error.message}`;
     }
   });
@@ -109,7 +113,34 @@
     document.getElementById("deleteKey").disabled = !saved;
   }
   function renderJevKey(saved) {
-    jevKeyStatus.textContent = saved ? "A TypeSafe key is saved locally. Leave this field blank to keep it." : "No TypeSafe API key saved.";
+    jevKeyStatus.textContent = saved ? "" : "No TypeSafe API key saved.";
     document.getElementById("deleteJevKey").disabled = !saved;
+  }
+
+  function showSaved() {
+    clearTimeout(noticeTimer);
+    notice.classList.remove("jas-saved");
+    void notice.offsetWidth;
+    notice.textContent = "Settings saved.";
+    notice.classList.add("jas-saved");
+    noticeTimer = setTimeout(() => {
+      notice.textContent = "";
+      notice.classList.remove("jas-saved");
+    }, 2200);
+  }
+
+  function focusRequestedField() {
+    const target = location.hash === "#jev-settings"
+      ? { section: document.getElementById("jev-settings"), field: jevKey }
+      : location.hash === "#claude-settings"
+        ? { section: document.getElementById("claude-settings"), field: key }
+        : null;
+    if (!target) return;
+    document.querySelectorAll(".settings-attention").forEach((element) => element.classList.remove("settings-attention"));
+    target.section.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.field.focus({ preventScroll: true });
+    void target.field.offsetWidth;
+    target.field.classList.add("settings-attention");
+    setTimeout(() => target.field.classList.remove("settings-attention"), 2600);
   }
 })();
