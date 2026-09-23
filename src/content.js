@@ -77,7 +77,7 @@
       <div class="jas-overlay" hidden>
         <section class="jas-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-dialog-title">
           <div class="jas-dialog-head"><h2 id="jas-dialog-title">Filter this search with AI</h2><button class="jas-close" type="button" aria-label="Close">×</button></div>
-          <p>Your instruction and saved preferences guide relevance. Your CV helps score qualifications. Cards are screened in batches; promising Jobnet descriptions are then read and graded together.</p>
+          <p>Your instruction and saved preferences guide relevance. Your CV helps score qualifications and becomes a relevance fallback when no other job preference is provided. Jev loads full descriptions and evaluates paired category and score questions together.</p>
           <label for="jas-prompt">What should the model prioritize for this search?</label>
           <textarea id="jas-prompt" rows="5" maxlength="6000" placeholder="For example: prioritize senior roles in Copenhagen with flexible work; avoid sales positions."></textarea>
           <label for="jas-provider">Provider for this run</label>
@@ -260,7 +260,7 @@
     root.querySelector(".jas-claude-model").hidden = jev;
     const hasKey = jev ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     root.querySelector(".jas-dialog-note").textContent = hasKey
-      ? `${cards().length} loaded cards. ${jev ? "Jev" : "Claude"} screens cards in batches, then reads promising Jobnet descriptions.`
+      ? `${cards().length} loaded cards. ${jev ? "Jev loads full descriptions, builds state batches up to 20k estimated tokens, and evaluates category and score together" : "Claude screens cards in batches, then reads promising Jobnet descriptions"}.`
       : `Save a ${jev ? "TypeSafe Jev" : "Claude"} API key in the full-page settings first.`;
     root.querySelector(".jas-start").disabled = !hasKey || !cards().length;
   }
@@ -288,7 +288,7 @@
   async function filterJobs(jobs, prompt, model, provider) {
     const key = searchKey();
     const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
-    const batchSize = provider === "jev" ? 5 : 10;
+    const batchSize = 10;
     try {
       for (let offset = 0; offset < jobs.length; offset += batchSize) {
         if (state.stop) break;

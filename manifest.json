@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Jobnet AI Sorter",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Load and rank Jobnet search results with Claude or TypeSafe Jev.",
   "permissions": [
     "storage",
@@ -11,7 +11,7 @@
     "https://api.typesafe.ai/*"
   ],
   "background": {
-    "scripts": ["src/ranking.js", "src/models.js", "src/claude.js", "src/jev.js", "src/background.js"],
+    "scripts": ["src/ranking.js", "src/models.js", "src/claude.js", "src/jev-evaluation.js", "src/jev.js", "src/background.js"],
     "persistent": false
   },
   "content_scripts": [{
