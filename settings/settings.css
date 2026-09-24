@@ -4,14 +4,29 @@ main { width: min(820px, calc(100% - 36px)); margin: 42px auto 70px; }
 header { margin-bottom: 28px; }
 .eyebrow { margin: 0; color: #376e50; font-size: clamp(28px, 6vw, 44px); font-weight: 900; letter-spacing: .06em; line-height: 1.05; }
 h2 { margin: 0 0 18px; font-size: 21px; }
-section { margin-bottom: 18px; padding: 25px; border: 1px solid #d6e2d8; border-radius: 12px; background: white; box-shadow: 0 3px 12px #233a2b0b; }
+.settings-tabs { display: flex; gap: 5px; margin-bottom: 18px; padding: 5px; border: 1px solid #c7d8cb; border-radius: 11px; background: #e8f0ea; }
+.settings-tabs button { flex: 1; border-color: transparent; background: transparent; color: #365247; }
+.settings-tabs button[aria-selected="true"] { background: #fff; color: #174c36; box-shadow: 0 2px 8px #173d3020; }
+.settings-panel[hidden] { display: none; }
+section, .provider-card { margin-bottom: 18px; border: 1px solid #d6e2d8; border-radius: 12px; background: white; box-shadow: 0 3px 12px #233a2b0b; }
+section { padding: 25px; }
+.provider-card summary { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 21px 25px; cursor: pointer; list-style-position: inside; }
+.provider-card summary > span:first-of-type { display: inline-flex; flex-direction: column; gap: 2px; vertical-align: middle; }
+.provider-card summary strong { font-size: 19px; }
+.provider-card summary small { color: #607267; font-size: 13px; font-weight: 500; }
+.provider-content { padding: 0 25px 25px; border-top: 1px solid #edf2ee; }
+.recommended, .alternative { margin-left: auto; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.recommended { background: #dff3e6; color: #17613e; }
+.alternative { background: #eef1ef; color: #56655e; }
 label { display: block; margin: 17px 0 7px; font-weight: 700; }
 input, textarea, select { width: 100%; padding: 11px 12px; border: 1px solid #9eb6a5; border-radius: 7px; color: #173126; background: #fff; font: inherit; }
 textarea { resize: vertical; }
 input:focus, textarea:focus, select:focus { outline: 2px solid #427b56; outline-offset: 2px; }
 .upload-label { margin-top: 10px; }
-.hint, .privacy { color: #607267; font-size: 13px; }
+.hint, .privacy, .security-note { color: #607267; font-size: 13px; }
 .hint { margin: 6px 0; }
+.security-note { margin: 7px 0 2px; padding-left: 19px; position: relative; }
+.security-note::before { content: "🔒"; position: absolute; left: 0; }
 button { border: 1px solid #27553b; border-radius: 7px; padding: 10px 17px; background: #245b3d; color: white; font: inherit; font-weight: 700; cursor: pointer; }
 button { transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease; }
 button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 10px #173d3030; }

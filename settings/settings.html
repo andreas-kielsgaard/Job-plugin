@@ -4,34 +4,50 @@
 <body>
   <main>
     <header><p class="eyebrow">JOBNET AI SORTER</p></header>
+    <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
+      <button id="model-tab" type="button" role="tab" aria-selected="true" aria-controls="model-panel" data-tab="model">Model settings</button>
+      <button id="profile-tab" type="button" role="tab" aria-selected="false" aria-controls="profile-panel" data-tab="profile" tabindex="-1">User profile</button>
+    </nav>
     <form id="settingsForm">
-      <section id="claude-settings"><h2>Claude connection</h2>
-        <label for="apiKey">Anthropic API key</label>
-        <input id="apiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
-        <p id="keyStatus" class="hint"></p>
-        <button id="deleteKey" type="button" class="text-button">Remove saved key</button>
-        <label for="model">Claude model type</label>
-        <select id="model" required><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
-      </section>
-      <section id="jev-settings"><h2>TypeSafe Jev connection</h2>
-        <label for="jevApiKey">TypeSafe API key</label>
-        <input id="jevApiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
-        <p id="jevKeyStatus" class="hint"></p>
-        <button id="deleteJevKey" type="button" class="text-button">Remove saved TypeSafe key</button>
-        <label for="detailLanes">Parallel Jobnet detail lanes</label>
-        <select id="detailLanes" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
-        <p class="hint">Three lanes balance throughput and load on Jobnet. Detail loading continues while Jev evaluates completed state batches.</p>
-      </section>
-      <section><h2>About you</h2>
-        <label for="cv">CV text</label>
-        <label for="cvPdf" class="upload-label">Import CV from PDF</label>
-        <input id="cvPdf" type="file" accept=".pdf,application/pdf">
-        <p class="hint">Text is extracted in Firefox and placed below for review. Import replaces the current CV text; click Save settings to keep it.</p>
-        <p id="pdfStatus" class="hint" role="status" aria-live="polite"></p>
-        <textarea id="cv" rows="13" maxlength="30000" placeholder="Paste your CV text here"></textarea>
-        <label for="preferences">Job preferences</label>
-        <textarea id="preferences" rows="8" maxlength="15000" placeholder="Roles, location, work style, non-negotiables, and anything else that matters"></textarea>
-      </section>
+      <div id="model-panel" class="settings-panel" role="tabpanel" aria-labelledby="model-tab">
+        <details id="jev-settings" class="provider-card">
+          <summary><span><strong>TypeSafe Jev</strong><small>Fast structured job classification and scoring</small></span><span class="recommended">Recommended</span></summary>
+          <div class="provider-content">
+            <label for="jevApiKey">TypeSafe API key</label>
+            <input id="jevApiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
+            <p class="security-note">Stored in Firefox extension storage and used only by the extension background process for direct TypeSafe requests. It is never inserted into Jobnet pages.</p>
+            <p id="jevKeyStatus" class="hint"></p>
+            <button id="deleteJevKey" type="button" class="text-button">Remove saved TypeSafe key</button>
+            <label for="detailLanes">Parallel Jobnet detail lanes</label>
+            <select id="detailLanes" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
+            <p class="hint">Three lanes balance throughput and load on Jobnet. Detail loading continues while Jev evaluates completed state batches.</p>
+          </div>
+        </details>
+        <details id="claude-settings" class="provider-card">
+          <summary><span><strong>Claude</strong><small>General-purpose alternative provider</small></span><span class="alternative">Alternative</span></summary>
+          <div class="provider-content">
+            <label for="apiKey">Anthropic API key</label>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="Paste a new key to save it">
+            <p class="security-note">Stored in Firefox extension storage and used only by the extension background process for direct Anthropic requests. It is never inserted into Jobnet pages.</p>
+            <p id="keyStatus" class="hint"></p>
+            <button id="deleteKey" type="button" class="text-button">Remove saved key</button>
+            <label for="model">Claude model type</label>
+            <select id="model" required><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
+          </div>
+        </details>
+      </div>
+      <div id="profile-panel" class="settings-panel" role="tabpanel" aria-labelledby="profile-tab" hidden>
+        <section><h2>User profile</h2>
+          <label for="cv">CV text</label>
+          <label for="cvPdf" class="upload-label">Import CV from PDF</label>
+          <input id="cvPdf" type="file" accept=".pdf,application/pdf">
+          <p class="hint">Text is extracted in Firefox and placed below for review. Import replaces the current CV text; click Save settings to keep it.</p>
+          <p id="pdfStatus" class="hint" role="status" aria-live="polite"></p>
+          <textarea id="cv" rows="13" maxlength="30000" placeholder="Paste your CV text here"></textarea>
+          <label for="preferences">Job preferences</label>
+          <textarea id="preferences" rows="8" maxlength="15000" placeholder="Roles, location, work style, non-negotiables, and anything else that matters"></textarea>
+        </section>
+      </div>
       <div class="actions"><button type="submit">Save settings</button><span id="notice" role="status"></span></div>
     </form>
   </main>

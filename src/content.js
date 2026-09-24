@@ -92,14 +92,11 @@
           <div class="jas-preferences-head"><label for="jas-run-preferences">Job preferences for this run</label><button class="jas-save-preferences" type="button">Save job preferences for future runs</button></div>
           <textarea id="jas-run-preferences" rows="5" maxlength="15000" placeholder="Roles, location, work style, non-negotiables, and anything else that matters"></textarea>
           <p class="jas-preferences-status" role="status"></p>
-          <label for="jas-provider">Provider for this run</label>
-          <select id="jas-provider"><option value="claude">Claude</option><option value="jev">TypeSafe Jev</option></select>
+          <label for="jas-provider">Provider for this run — choose one</label>
+          <select id="jas-provider"><option value="jev">TypeSafe Jev — recommended</option><option value="claude">Claude — alternative</option></select>
           <div class="jas-claude-model"><label for="jas-model">Claude model type for this run</label>
           <select id="jas-model"><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select></div>
           <div class="jas-jev-state-strategy" hidden>
-            <label class="jas-check-option"><input id="jas-limit-state-posts" type="checkbox"> Limit the number of posts in each Jev state</label>
-            <div class="jas-state-count" hidden><label for="jas-posts-per-state">Maximum posts per state</label><input id="jas-posts-per-state" type="number" min="1" max="50" step="1" value="10"></div>
-            <p class="jas-field-hint">The 20k state limit still applies, so long descriptions can produce smaller states.</p>
             <label class="jas-check-option"><input id="jas-external-details" type="checkbox"> Load full descriptions from external job sites</label>
             <p class="jas-field-hint">Firefox asks for access to the external sites currently represented in the loaded posts. Requests omit browser credentials.</p>
             <label class="jas-check-option"><input id="jas-estimate-cost" type="checkbox"> Estimate Jev cost before filtering</label>
@@ -121,6 +118,12 @@
         <section class="jas-dialog jas-cost-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-cost-title">
           <div class="jas-dialog-head"><h2 id="jas-cost-title">Jev cost estimate</h2><button class="jas-cost-close" type="button" aria-label="Close">×</button></div>
           <p class="jas-cost-summary"></p>
+          <div class="jas-cost-state-strategy">
+            <label class="jas-check-option"><input id="jas-limit-state-posts" type="checkbox"> Limit the number of posts in each Jev state</label>
+            <p class="jas-field-hint">Smaller states can improve Jev's judgement by giving each post more focused context, but they require more requests and can cost more.</p>
+            <div class="jas-state-count" hidden><label for="jas-posts-per-state">Maximum posts per state</label><input id="jas-posts-per-state" type="number" min="1" max="50" step="1" value="10"></div>
+          </div>
+          <p class="jas-cost-updating" role="status"></p>
           <div class="jas-cost-options"></div>
           <p class="jas-cost-note"></p>
           <div class="jas-dialog-actions"><button class="jas-cost-cancel" type="button">Cancel</button><button class="jas-cost-confirm" type="button">Apply AI filter</button></div>
@@ -141,7 +144,6 @@
       root.querySelector(".jas-start").addEventListener("click", startFilter);
       root.querySelector(".jas-save-preferences").addEventListener("click", saveRunPreferences);
       root.querySelector("#jas-provider").addEventListener("change", updateProvider);
-      root.querySelector("#jas-limit-state-posts").addEventListener("change", updateStateStrategy);
       root.querySelector("#jas-estimate-cost").addEventListener("change", (event) => {
         if (event.target.checked) root.querySelector("#jas-external-details").checked = true;
       });
@@ -364,10 +366,8 @@
     const loadOption = root.querySelector(".jas-load-option");
     loadOption.hidden = !loadButton();
     root.querySelector("#jas-load-first").checked = false;
-    root.querySelector("#jas-limit-state-posts").checked = false;
     root.querySelector("#jas-external-details").checked = false;
     root.querySelector("#jas-estimate-cost").checked = false;
-    root.querySelector("#jas-posts-per-state").value = "10";
     updateProvider();
     promptDialog.hidden = false;
     root.querySelector("#jas-prompt").focus();
@@ -378,18 +378,11 @@
     const jev = root.querySelector("#jas-provider").value === "jev";
     root.querySelector(".jas-claude-model").hidden = jev;
     root.querySelector(".jas-jev-state-strategy").hidden = !jev;
-    updateStateStrategy();
     const hasKey = jev ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     root.querySelector(".jas-dialog-note").textContent = hasKey
       ? `${cards().length} loaded posts are ready to review.`
       : `${jev ? "TypeSafe Jev" : "Claude"} needs an API key. Starting will take you to settings.`;
     root.querySelector(".jas-start").disabled = !cards().length;
-  }
-
-  function updateStateStrategy() {
-    const enabled = root.querySelector("#jas-provider").value === "jev" && root.querySelector("#jas-limit-state-posts").checked;
-    root.querySelector(".jas-state-count").hidden = !enabled;
-    root.querySelector("#jas-posts-per-state").disabled = !enabled;
   }
 
   function closePrompt() {
@@ -446,12 +439,6 @@
     const hasKey = provider === "jev" ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     if (!hasKey) { openKeyDialog(provider); return; }
     if (!prompt) { root.querySelector(".jas-dialog-note").textContent = "Enter an instruction for this run."; return; }
-    const limitStatePosts = provider === "jev" && root.querySelector("#jas-limit-state-posts").checked;
-    const postsPerState = Math.trunc(Number(root.querySelector("#jas-posts-per-state").value));
-    if (limitStatePosts && (postsPerState < 1 || postsPerState > 50)) {
-      root.querySelector(".jas-dialog-note").textContent = "Choose 1–50 posts per Jev state.";
-      return;
-    }
     const externalDetails = provider === "jev" && root.querySelector("#jas-external-details").checked;
     const estimateCost = provider === "jev" && root.querySelector("#jas-estimate-cost").checked;
     if (externalDetails) {
@@ -470,7 +457,7 @@
     }
     const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
     closePrompt();
-    const configuration = { prompt, preferences, model, provider, loadRemaining, postsPerState: limitStatePosts ? postsPerState : null, externalDetails };
+    const configuration = { prompt, preferences, model, provider, loadRemaining, postsPerState: null, externalDetails };
     if (estimateCost) {
       setRunning("estimating", loadRemaining ? advertisedTotal() || cards().length : cards().length);
       log(`Loading every description for a Jev cost estimate${loadRemaining ? " after all remaining cards load" : ""}. No Jev query will run before confirmation.`);
@@ -498,6 +485,19 @@
       if (configuration.loadRemaining) await loadAllCards(key);
       if (state.stop) return finish("stopped", "Stopped before the estimate was ready.");
       const jobs = cards();
+      const estimate = await calculateJevEstimate(configuration, jobs);
+      if (state.stop) return finish("stopped", "Stopped before the estimate was ready.");
+      const decision = await showCostEstimate(estimate, jobs, configuration);
+      if (!decision.confirmed || state.stop) return finish("stopped", "AI filtering cancelled after the cost estimate.");
+      configuration.postsPerState = decision.postsPerState;
+      configuration.loadRemaining = false;
+      beginFiltering(configuration);
+    } catch (error) {
+      finish("error", `Cost estimate stopped: ${error.message}`);
+    }
+  }
+
+  async function calculateJevEstimate(configuration, jobs) {
       const estimate = {
         direct: { requests: 0, tokens: 0, usd: 0 },
         enhanced: { requests: 0, tokens: 0, usd: 0, selectionRequests: 0, selectionTokens: 0 },
@@ -526,17 +526,10 @@
         estimate.cacheHits += Number(response.cacheHits || 0);
         estimate.pricing = response.pricing;
       }
-      if (state.stop) return finish("stopped", "Stopped before the estimate was ready.");
-      const confirmed = await showCostEstimate(estimate, jobs.length);
-      if (!confirmed || state.stop) return finish("stopped", "AI filtering cancelled after the cost estimate.");
-      configuration.loadRemaining = false;
-      beginFiltering(configuration);
-    } catch (error) {
-      finish("error", `Cost estimate stopped: ${error.message}`);
-    }
+      return estimate;
   }
 
-  function showCostEstimate(estimate, jobCount) {
+  function showCostEstimate(initialEstimate, jobs, configuration) {
     const money = (value) => `$${Number(value).toFixed(value < 0.01 ? 6 : 4)}`;
     const row = (title, data, note) => {
       const section = document.createElement("section");
@@ -553,14 +546,58 @@
       }
       return section;
     };
-    root.querySelector(".jas-cost-summary").textContent = `${jobCount} descriptions are loaded and cached. No Jev request has run yet.`;
-    root.querySelector(".jas-cost-options").replaceChildren(
-      row("Direct full details", estimate.direct, "Sends the extracted detail blocks directly to filtering."),
-      row("Enhanced detail selection", estimate.enhanced, `Includes ${estimate.enhanced.selectionRequests} selector requests, then filtering. Uses the selector’s maximum retained detail size, so actual cost can be lower.`)
-    );
-    root.querySelector(".jas-cost-note").textContent = `Estimated at $${estimate.pricing.inputUsdPerMillion} per million input tokens; TypeSafe output tokens are currently free. ${estimate.detailRequests} detail pages loaded now and ${estimate.cacheHits} reused from cache. Actual billed tokens can differ.`;
+    const limit = root.querySelector("#jas-limit-state-posts");
+    const count = root.querySelector("#jas-posts-per-state");
+    const countRow = root.querySelector(".jas-state-count");
+    const updating = root.querySelector(".jas-cost-updating");
+    const confirm = root.querySelector(".jas-cost-confirm");
+    let revision = 0;
+    const render = (estimate) => {
+      root.querySelector(".jas-cost-summary").textContent = `${jobs.length} descriptions are loaded and cached. No Jev request has run yet.`;
+      root.querySelector(".jas-cost-options").replaceChildren(
+        row("Direct full details", estimate.direct, "Sends the extracted detail blocks directly to filtering."),
+        row("Enhanced detail selection", estimate.enhanced, `Includes ${estimate.enhanced.selectionRequests} selector requests, then filtering. Uses the selector’s maximum retained detail size, so actual cost can be lower.`)
+      );
+      root.querySelector(".jas-cost-note").textContent = `Estimated at $${estimate.pricing.inputUsdPerMillion} per million input tokens; TypeSafe output tokens are currently free. ${estimate.detailRequests} detail pages loaded now and ${estimate.cacheHits} reused from cache. Actual billed tokens can differ.`;
+    };
+    const recalculate = async () => {
+      countRow.hidden = !limit.checked;
+      count.disabled = !limit.checked;
+      const postsPerState = limit.checked ? Math.trunc(Number(count.value)) : null;
+      if (limit.checked && (postsPerState < 1 || postsPerState > 50)) {
+        updating.textContent = "Choose 1–50 posts per Jev state.";
+        confirm.disabled = true;
+        return;
+      }
+      const current = ++revision;
+      confirm.disabled = true;
+      updating.textContent = "Updating estimate from cached descriptions…";
+      try {
+        const estimate = await calculateJevEstimate({ ...configuration, postsPerState }, jobs);
+        if (current !== revision) return;
+        render(estimate);
+        updating.textContent = postsPerState ? `Estimate updated for at most ${postsPerState} posts per state.` : "Estimate updated without a per-state post limit.";
+        confirm.disabled = false;
+      } catch (error) {
+        if (current !== revision) return;
+        updating.textContent = `Could not update estimate: ${error.message}`;
+      }
+    };
+    limit.checked = false;
+    count.value = "10";
+    countRow.hidden = true;
+    count.disabled = true;
+    limit.onchange = recalculate;
+    count.onchange = recalculate;
+    count.oninput = () => {
+      clearTimeout(count._jasTimer);
+      count._jasTimer = setTimeout(recalculate, 350);
+    };
+    updating.textContent = "Change the state size to compare its estimated cost.";
+    confirm.disabled = false;
+    render(initialEstimate);
     costDialog.hidden = false;
-    root.querySelector(".jas-cost-confirm").focus();
+    confirm.focus();
     return new Promise((resolve) => { costDecision = resolve; });
   }
 
@@ -568,7 +605,9 @@
     if (costDialog) costDialog.hidden = true;
     const resolve = costDecision;
     costDecision = null;
-    resolve?.(confirmed);
+    const limit = root?.querySelector("#jas-limit-state-posts");
+    const postsPerState = confirmed && limit?.checked ? Math.trunc(Number(root.querySelector("#jas-posts-per-state").value)) : null;
+    resolve?.({ confirmed, postsPerState });
   }
 
   function isExternalJobUrl(value) {

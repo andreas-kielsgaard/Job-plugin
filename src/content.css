@@ -25,9 +25,10 @@
 #jas-root .jas-dialog textarea { resize: vertical; }
 #jas-root .jas-preferences-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
 #jas-root .jas-preferences-head label { margin: 0; }
-#jas-root .jas-save-preferences { border: 0; padding: 4px 0; background: transparent; color: #17664f; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; text-align: right; }
+#jas-root .jas-save-preferences { border: 1px solid #7fa99a; border-radius: 6px; padding: 6px 9px; background: #e8f4ef; color: #17664f; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; text-align: right; }
 #jas-root .jas-save-preferences:disabled { opacity: .58; cursor: wait; }
 #jas-root .jas-preferences-status { min-height: 18px; margin: 4px 0 10px !important; color: #426159; font-size: 12px; }
+#jas-root #jas-provider { appearance: auto !important; border: 2px solid #4f7f70; background-color: #f4faf7; cursor: pointer; font-weight: 700; }
 #jas-root .jas-dialog .jas-load-option, #jas-root .jas-dialog .jas-check-option { display: flex; gap: 9px; align-items: flex-start; margin-top: 16px; font-weight: 600; }
 #jas-root .jas-load-option[hidden] { display: none; }
 #jas-root .jas-load-option input[type="checkbox"], #jas-root .jas-check-option input[type="checkbox"] { position: static !important; display: block !important; width: 18px !important; height: 18px !important; flex: 0 0 18px; margin: 2px 0 0 !important; opacity: 1 !important; appearance: auto !important; accent-color: #245744; }
@@ -42,6 +43,9 @@
 #jas-root .jas-cost-options strong { font-size: 15px; }
 #jas-root .jas-cost-options span, #jas-root .jas-cost-options small { grid-column: 1; color: #526a62; }
 #jas-root .jas-cost-options b { grid-column: 2; grid-row: 1 / span 3; align-self: center; color: #17664f; font-size: 18px; }
+#jas-root .jas-cost-state-strategy { margin: 14px 0; padding: 12px 14px; border: 1px solid #bbcdc7; border-radius: 9px; background: #f5faf8; }
+#jas-root .jas-cost-state-strategy .jas-check-option { margin-top: 0; }
+#jas-root .jas-cost-updating { min-height: 18px; margin: -4px 0 10px; color: #426159; font-size: 12px; }
 #jas-root .jas-cost-note { color: #586c64; font-size: 12px; }
 #main-content article.jas-clear .card { border-left: 7px solid #24845a; background: #e7f6ec; }
 #main-content article.jas-potential .card { border-left: 7px solid #d79b16; background: #fff6d9; }

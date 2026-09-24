@@ -12,10 +12,22 @@
   const keyStatus = document.getElementById("keyStatus");
   const jevKeyStatus = document.getElementById("jevKeyStatus");
   const notice = document.getElementById("notice");
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  const panels = { model: document.getElementById("model-panel"), profile: document.getElementById("profile-panel") };
   let noticeTimer;
 
   load().finally(focusRequestedField);
   window.addEventListener("hashchange", focusRequestedField);
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => showTab(tab.dataset.tab));
+    tab.addEventListener("keydown", (event) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      const next = tabs[(tabs.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
+      showTab(next.dataset.tab);
+      next.focus();
+    });
+  });
   pdfInput.addEventListener("change", importPdf);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -129,13 +141,27 @@
     }, 2200);
   }
 
+  function showTab(name) {
+    for (const tab of tabs) {
+      const selected = tab.dataset.tab === name;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    }
+    for (const [key, panel] of Object.entries(panels)) panel.hidden = key !== name;
+  }
+
   function focusRequestedField() {
     const target = location.hash === "#jev-settings"
       ? { section: document.getElementById("jev-settings"), field: jevKey }
       : location.hash === "#claude-settings"
         ? { section: document.getElementById("claude-settings"), field: key }
         : null;
-    if (!target) return;
+    if (!target) {
+      if (location.hash === "#profile") showTab("profile");
+      return;
+    }
+    showTab("model");
+    target.section.open = true;
     document.querySelectorAll(".settings-attention").forEach((element) => element.classList.remove("settings-attention"));
     target.section.scrollIntoView({ behavior: "smooth", block: "center" });
     target.field.focus({ preventScroll: true });
