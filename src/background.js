@@ -5,8 +5,12 @@
   const controllers = new Map();
   const DEFAULT_MODEL = "haiku";
   const DEFAULT_DETAIL_LANES = 3;
-  const DETAIL_CACHE_PREFIX = "jobDetail:";
+  const DETAIL_CACHE_PREFIX = "jobDetail:v3:";
   const DETAIL_CACHE_AGE = 7 * 24 * 60 * 60 * 1000;
+  const NEGATIVE_CACHE_AGE = 12 * 60 * 60 * 1000;
+  const EXTRACTOR_VERSION = 1;
+  const detailInflight = new Map();
+  const originQueues = new Map();
 
   browser.runtime.onMessage.addListener((message, sender) => {
     if (!message || typeof message !== "object") return undefined;
@@ -18,6 +22,7 @@
     if (message.type === "JAS_DELETE_JEV_KEY") return deleteJevKey();
     if (message.type === "JAS_OPEN_SETTINGS") return openSettings(message.section);
     if (message.type === "JAS_ENSURE_PAGE") return ensureSearchContent(message.tabId);
+    if (message.type === "JAS_REQUEST_EXTERNAL_ACCESS") return requestExternalAccess(message.urls, sender);
     if (message.type === "JAS_GRADE_BATCH") return gradeBatch(message, sender);
     if (message.type === "JAS_CANCEL") return cancel(sender);
     return undefined;
@@ -98,6 +103,26 @@
     return sender.tab?.id && /^https:\/\/jobnet\.dk\/find-job\/?(?:[?#]|$)/.test(sender.url || "");
   }
 
+  async function requestExternalAccess(urls, sender) {
+    if (!validSearchSender(sender)) return { ok: false, error: "Open a Jobnet search page." };
+    const origins = [...new Set((Array.isArray(urls) ? urls : []).map(permissionOrigin).filter(Boolean))].slice(0, 50);
+    if (!origins.length) return { ok: true, granted: true, origins: [] };
+    try {
+      const granted = await browser.permissions.request({ origins });
+      return { ok: true, granted, origins };
+    } catch (error) {
+      return { ok: false, error: `Could not request external site access: ${String(error.message || error).slice(0, 300)}` };
+    }
+  }
+
+  function permissionOrigin(value) {
+    try {
+      const url = new URL(String(value || ""));
+      if (url.protocol !== "https:" || url.hostname === "jobnet.dk" || url.hostname.endsWith(".jobnet.dk")) return null;
+      return `${url.origin}/*`;
+    } catch (_) { return null; }
+  }
+
   async function gradeBatch(message, sender) {
     if (!validSearchSender(sender)) return { ok: false, error: "Open a Jobnet search page." };
     const tabId = sender.tab.id;
@@ -124,6 +149,18 @@
         model = await JobnetModels.resolve(modelType, data.apiKey, controller.signal);
       } else model = "jev-latest";
       onActivity(`Using ${model}.`);
+      const preparedJobs = jobs.map((job) => ({
+        id: String(job.id),
+        title: String(job.title || "").slice(0, 300),
+        summary: String(job.summary || "").slice(0, 3500),
+        url: String(job.url || "").slice(0, 1000)
+      }));
+      const jobsById = new Map(preparedJobs.map((job) => [job.id, job]));
+      const externalDetails = provider === "jev" && message.externalDetails === true;
+      const recordMetrics = (sample) => {
+        metrics.requests += 1;
+        for (const key of ["elapsedMs", "inputTokens", "cacheCreationTokens", "cacheReadTokens", "outputTokens"]) metrics[key] += sample[key];
+      };
       const result = await (provider === "jev" ? JobnetJev : JobnetClaude).gradeBatch({
         apiKey: provider === "jev" ? data.jevApiKey : data.apiKey,
         model,
@@ -132,22 +169,20 @@
         prompt: String(message.prompt || "").slice(0, 6000),
         detailLanes: validDetailLanes(data.detailLanes),
         maxPostingsPerState: provider === "jev" ? validPostsPerState(message.postsPerState) : null,
-        jobs: jobs.map((job) => ({
-          id: String(job.id),
-          title: String(job.title || "").slice(0, 300),
-          summary: String(job.summary || "").slice(0, 3500),
-          url: String(job.url || "").slice(0, 500)
-        })),
+        jobs: preparedJobs,
         readDetails: async (id) => {
-          const detail = await cachedJobDetails(id, controller.signal);
+          const detail = await cachedJobDetails(jobsById.get(id), {
+            externalDetails,
+            apiKey: data.jevApiKey,
+            onActivity,
+            onMetrics: recordMetrics,
+            signal: controller.signal
+          });
           metrics[detail.fromCache ? "cacheHits" : "detailRequests"] += 1;
           return detail;
         },
         onActivity,
-        onMetrics: (sample) => {
-          metrics.requests += 1;
-          for (const key of ["elapsedMs", "inputTokens", "cacheCreationTokens", "cacheReadTokens", "outputTokens"]) metrics[key] += sample[key];
-        },
+        onMetrics: recordMetrics,
         signal: controller.signal
       });
       return { ok: true, grades: result, metrics };
@@ -169,19 +204,80 @@
     return count >= 1 && count <= 50 ? count : null;
   }
 
-  async function cachedJobDetails(id, signal) {
+  async function cachedJobDetails(job, options) {
+    const { signal } = options;
     if (signal.aborted) throw new DOMException("Stopped.", "AbortError");
-    const cacheKey = `${DETAIL_CACHE_PREFIX}${id}`;
+    if (!job?.id) throw new Error("Job details were requested without a valid card.");
+    const cacheKey = `${DETAIL_CACHE_PREFIX}${job.id}`;
     try {
       const item = (await store.get(cacheKey))[cacheKey];
-      if (item && typeof item.text === "string" && Date.now() - item.at < DETAIL_CACHE_AGE) {
+      const maxAge = item?.quality === "external-unavailable" ? NEGATIVE_CACHE_AGE : DETAIL_CACHE_AGE;
+      const mayReuse = item?.quality !== "external-unavailable" || !options.externalDetails;
+      if (mayReuse && item && item.url === job.url && item.extractorVersion === EXTRACTOR_VERSION && typeof item.text === "string" && Date.now() - item.at < maxAge) {
         return { text: item.text, fromCache: true };
       }
       if (item) await store.remove(cacheKey);
-    } catch (_) { /* Cache read failure must not block a Jobnet detail request. */ }
-    const text = await readJobDetails(id, signal);
-    await store.set({ [cacheKey]: { text, at: Date.now() } }).catch(() => {});
-    return { text, fromCache: false };
+    } catch (_) { /* Cache read failure must not block a detail request. */ }
+    if (detailInflight.has(cacheKey)) return detailInflight.get(cacheKey);
+    const pending = (async () => {
+      const result = isExternal(job.url)
+        ? await readExternalJobDetails(job, options)
+        : { text: await readJobDetails(job.id, signal), quality: "jobnet" };
+      await store.set({ [cacheKey]: { ...result, url: job.url, extractorVersion: EXTRACTOR_VERSION, at: Date.now() } }).catch(() => {});
+      return { text: result.text, fromCache: false };
+    })();
+    detailInflight.set(cacheKey, pending);
+    try { return await pending; } finally { detailInflight.delete(cacheKey); }
+  }
+
+  function isExternal(value) {
+    try {
+      const hostname = new URL(value).hostname;
+      return hostname !== "jobnet.dk" && !hostname.endsWith(".jobnet.dk");
+    } catch (_) { return false; }
+  }
+
+  async function readExternalJobDetails(job, { externalDetails, apiKey, onActivity, onMetrics, signal }) {
+    const fallback = `${job.title}\n\n${job.summary}\n\nFull external description unavailable; evaluate from the Jobnet search card.`;
+    if (!externalDetails) return { text: fallback, quality: "external-unavailable" };
+    const permission = permissionOrigin(job.url);
+    if (!permission || !(await browser.permissions.contains({ origins: [permission] }))) {
+      return { text: fallback, quality: "external-unavailable" };
+    }
+    let origin;
+    try { origin = new URL(job.url).origin; } catch (_) { return { text: fallback, quality: "external-unavailable" }; }
+    try {
+      return await withOriginQueue(origin, async () => {
+        if (signal.aborted) throw new DOMException("Stopped.", "AbortError");
+        onActivity(`Loading external description for ${job.title}.`, true);
+        const response = await fetch(job.url, { credentials: "omit", redirect: "follow", signal });
+        const html = await response.text();
+        const inspection = JobnetExternalExtractor.inspectHtml({
+          html,
+          url: response.url || job.url,
+          status: response.status,
+          expectedTitle: job.title,
+          cardSummary: job.summary
+        });
+        const selected = await JobnetJev.extractExternalDetail({ apiKey, job, inspection, onActivity, onMetrics, signal });
+        if (!selected.ok) {
+          onActivity(`External details unavailable for ${job.title}: ${selected.reason}`);
+          return { text: fallback, quality: "external-unavailable" };
+        }
+        return { text: `${job.title}\n\n${selected.text}`, quality: "external" };
+      });
+    } catch (error) {
+      if (signal.aborted) throw error;
+      onActivity(`External details unavailable for ${job.title}: ${String(error.message || error).slice(0, 180)}`);
+      return { text: fallback, quality: "external-unavailable" };
+    }
+  }
+
+  async function withOriginQueue(origin, task) {
+    const previous = originQueues.get(origin) || Promise.resolve();
+    const current = previous.catch(() => {}).then(task);
+    originQueues.set(origin, current);
+    try { return await current; } finally { if (originQueues.get(origin) === current) originQueues.delete(origin); }
   }
 
   async function readJobDetails(id, signal) {

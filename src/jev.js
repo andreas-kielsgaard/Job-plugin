@@ -72,6 +72,15 @@
     return answer.noul >= 0.5;
   }
 
+  async function extractExternalDetail({ apiKey, job, inspection, onActivity, onMetrics, signal }) {
+    const external = globalThis.JobnetExternalEvaluation;
+    const state = external.buildState(inspection);
+    if (!state.candidates.length) return { ok: false, reason: "The external page exposed no substantial content blocks." };
+    onActivity(`Jev: selecting job content from ${state.candidates.length} external page blocks for ${job.title}.`);
+    const answers = await request(apiKey, state, external.buildQuestions(state), signal, onMetrics);
+    return external.combine(inspection, answers);
+  }
+
   async function gradeBatch({ apiKey, cv, preferences, prompt, jobs, detailLanes = 3, maxPostingsPerState = null, readDetails, onActivity, onMetrics, signal }) {
     const packer = evaluation.createPacker({ cv, preferences, prompt, maxPostings: maxPostingsPerState });
     const grades = new Map();
@@ -136,6 +145,6 @@
     return jobs.map((job) => grades.get(job.id));
   }
 
-  globalThis.JobnetJev = { gradeBatch };
-  if (typeof module !== "undefined" && module.exports) module.exports = { gradeBatch };
+  globalThis.JobnetJev = { gradeBatch, extractExternalDetail };
+  if (typeof module !== "undefined" && module.exports) module.exports = { gradeBatch, extractExternalDetail };
 })();

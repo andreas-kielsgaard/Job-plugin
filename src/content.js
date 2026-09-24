@@ -95,6 +95,8 @@
             <label class="jas-check-option"><input id="jas-limit-state-posts" type="checkbox"> Limit the number of posts in each Jev state</label>
             <div class="jas-state-count" hidden><label for="jas-posts-per-state">Maximum posts per state</label><input id="jas-posts-per-state" type="number" min="1" max="50" step="1" value="10"></div>
             <p class="jas-field-hint">The 20k state limit still applies, so long descriptions can produce smaller states.</p>
+            <label class="jas-check-option"><input id="jas-external-details" type="checkbox"> Load full descriptions from external job sites</label>
+            <p class="jas-field-hint">Firefox asks for access to the external sites currently represented in the loaded posts. Requests omit browser credentials.</p>
           </div>
           <label class="jas-load-option"><input id="jas-load-first" type="checkbox"> Load all remaining posts while filtering</label>
           <p class="jas-dialog-note"></p>
@@ -330,6 +332,7 @@
     loadOption.hidden = !loadButton();
     root.querySelector("#jas-load-first").checked = false;
     root.querySelector("#jas-limit-state-posts").checked = false;
+    root.querySelector("#jas-external-details").checked = false;
     root.querySelector("#jas-posts-per-state").value = "10";
     updateProvider();
     promptDialog.hidden = false;
@@ -381,7 +384,7 @@
     if (response?.ok) closeKeyDialog();
   }
 
-  function startFilter() {
+  async function startFilter() {
     const prompt = root.querySelector("#jas-prompt").value.trim();
     const model = root.querySelector("#jas-model").value;
     const provider = root.querySelector("#jas-provider").value;
@@ -394,6 +397,21 @@
       root.querySelector(".jas-dialog-note").textContent = "Choose 1–50 posts per Jev state.";
       return;
     }
+    const externalDetails = provider === "jev" && root.querySelector("#jas-external-details").checked;
+    if (externalDetails) {
+      const urls = cards().map((job) => job.url).filter(isExternalJobUrl);
+      if (urls.length) {
+        const startButton = root.querySelector(".jas-start");
+        startButton.disabled = true;
+        root.querySelector(".jas-dialog-note").textContent = `Requesting access to ${new Set(urls.map((url) => new URL(url).origin)).size} external job sites…`;
+        const access = await browser.runtime.sendMessage({ type: "JAS_REQUEST_EXTERNAL_ACCESS", urls }).catch((error) => ({ ok: false, error: error.message }));
+        startButton.disabled = false;
+        if (!access?.ok || !access.granted) {
+          root.querySelector(".jas-dialog-note").textContent = access?.error || "External site access was not granted. Uncheck external descriptions or grant access to continue.";
+          return;
+        }
+      }
+    }
     const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
     closePrompt();
     const jobs = cards();
@@ -402,11 +420,18 @@
       job.article.querySelector(".jas-grade")?.remove();
     }
     setRunning("reviewing", loadRemaining ? advertisedTotal() || jobs.length : jobs.length);
-    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${limitStatePosts ? ` with at most ${postsPerState} posts per state` : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
-    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining, limitStatePosts ? postsPerState : null));
+    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${limitStatePosts ? ` with at most ${postsPerState} posts per state` : ""}${externalDetails ? " with external descriptions" : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
+    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining, limitStatePosts ? postsPerState : null, externalDetails));
   }
 
-  async function filterJobs(prompt, model, provider, loadRemaining, postsPerState) {
+  function isExternalJobUrl(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.hostname !== "jobnet.dk" && !url.hostname.endsWith(".jobnet.dk");
+    } catch (_) { return false; }
+  }
+
+  async function filterJobs(prompt, model, provider, loadRemaining, postsPerState, externalDetails) {
     const key = searchKey();
     const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
     const batchSize = provider === "jev" ? 50 : 10;
@@ -437,7 +462,7 @@
         batchNumber += 1;
         setStatus(`Reviewing ${batch.length} posts with ${name}; ${state.done} completed${loadingDone ? "" : `, ${cards().length} loaded so far`}.`);
         log(state.message);
-        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider, postsPerState,
+        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider, postsPerState, externalDetails,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url })) });
         if (state.stop) break;
         if (!response?.ok) throw new Error(response?.error || `${name} did not return grades.`);
