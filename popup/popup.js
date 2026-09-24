@@ -8,7 +8,10 @@
   const total = document.getElementById("total");
   let tabId = null;
 
-  document.getElementById("settings").addEventListener("click", () => browser.runtime.openOptionsPage());
+  document.getElementById("settings").addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ type: "JAS_OPEN_SETTINGS" });
+    window.close();
+  });
   loadButton.addEventListener("click", () => sendAction("JAS_LOAD_ALL"));
   filterButton.addEventListener("click", () => sendAction("JAS_OPEN_AI"));
   init();

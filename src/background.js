@@ -92,8 +92,8 @@
   }
 
   async function openSettings(section) {
-    const target = section === "jev-settings" ? "jev-settings" : "claude-settings";
-    await browser.tabs.create({ url: browser.runtime.getURL(`settings/settings.html#${target}`) });
+    const target = section === "jev-settings" || section === "claude-settings" ? `#${section}` : "";
+    await browser.tabs.create({ url: browser.runtime.getURL(`settings/settings.html${target}`) });
     return { ok: true };
   }
 

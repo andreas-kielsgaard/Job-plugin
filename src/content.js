@@ -180,7 +180,11 @@
         <div class="jas-page-actions"><button class="jas-page-load" type="button">Load all posts</button><button class="jas-page-filter" type="button">Filter loaded posts with AI</button><button class="jas-page-settings" type="button">Settings</button></div>`;
       pageControls.querySelector(".jas-page-load").addEventListener("click", startLoad);
       pageControls.querySelector(".jas-page-filter").addEventListener("click", openPrompt);
-      pageControls.querySelector(".jas-page-settings").addEventListener("click", () => browser.runtime.openOptionsPage());
+      pageControls.querySelector(".jas-page-settings").addEventListener("click", () => {
+        browser.runtime.sendMessage({ type: "JAS_OPEN_SETTINGS" }).catch(() => {
+          setStatus("Could not open settings. Reload the Jobnet page and try again.");
+        });
+      });
     }
     const main = document.querySelector("#main-content");
     const searchButton = [...document.querySelectorAll("#main-content button")].find((button) => button.textContent.trim() === "Søg");
