@@ -12,6 +12,8 @@
   let stopButton;
   let promptDialog;
   let keyDialog;
+  let costDialog;
+  let costDecision = null;
   let pageControls;
   let availableKeys = { hasApiKey: false, hasJevApiKey: false };
 
@@ -97,6 +99,8 @@
             <p class="jas-field-hint">The 20k state limit still applies, so long descriptions can produce smaller states.</p>
             <label class="jas-check-option"><input id="jas-external-details" type="checkbox"> Load full descriptions from external job sites</label>
             <p class="jas-field-hint">Firefox asks for access to the external sites currently represented in the loaded posts. Requests omit browser credentials.</p>
+            <label class="jas-check-option"><input id="jas-estimate-cost" type="checkbox"> Estimate Jev cost before filtering</label>
+            <p class="jas-field-hint">Loads every description in this run, then pauses before any Jev request and shows both query strategies.</p>
           </div>
           <label class="jas-load-option"><input id="jas-load-first" type="checkbox"> Load all remaining posts while filtering</label>
           <p class="jas-dialog-note"></p>
@@ -109,6 +113,15 @@
           <p class="jas-key-message"></p>
           <div class="jas-dialog-actions"><button class="jas-key-cancel" type="button">Cancel</button><button class="jas-key-settings" type="button">Take me to settings</button></div>
         </section>
+      </div>
+      <div class="jas-cost-overlay" hidden>
+        <section class="jas-dialog jas-cost-dialog" role="dialog" aria-modal="true" aria-labelledby="jas-cost-title">
+          <div class="jas-dialog-head"><h2 id="jas-cost-title">Jev cost estimate</h2><button class="jas-cost-close" type="button" aria-label="Close">×</button></div>
+          <p class="jas-cost-summary"></p>
+          <div class="jas-cost-options"></div>
+          <p class="jas-cost-note"></p>
+          <div class="jas-dialog-actions"><button class="jas-cost-cancel" type="button">Cancel</button><button class="jas-cost-confirm" type="button">Apply AI filter</button></div>
+        </section>
       </div>`;
       document.body.append(root);
       root.querySelector(".jas-panel-head strong").append(` · v${browser.runtime.getManifest().version}`);
@@ -117,6 +130,7 @@
       stopButton = root.querySelector(".jas-stop");
       promptDialog = root.querySelector(".jas-overlay");
       keyDialog = root.querySelector(".jas-key-overlay");
+      costDialog = root.querySelector(".jas-cost-overlay");
       root.querySelector(".jas-minimize").addEventListener("click", () => root.querySelector(".jas-panel").classList.toggle("jas-collapsed"));
       root.querySelector(".jas-close").addEventListener("click", closePrompt);
       root.querySelector(".jas-cancel").addEventListener("click", closePrompt);
@@ -124,18 +138,30 @@
       root.querySelector(".jas-start").addEventListener("click", startFilter);
       root.querySelector("#jas-provider").addEventListener("change", updateProvider);
       root.querySelector("#jas-limit-state-posts").addEventListener("change", updateStateStrategy);
+      root.querySelector("#jas-estimate-cost").addEventListener("change", (event) => {
+        if (event.target.checked) root.querySelector("#jas-external-details").checked = true;
+      });
+      root.querySelector("#jas-external-details").addEventListener("change", (event) => {
+        if (!event.target.checked) root.querySelector("#jas-estimate-cost").checked = false;
+      });
       root.querySelector(".jas-key-close").addEventListener("click", closeKeyDialog);
       root.querySelector(".jas-key-cancel").addEventListener("click", closeKeyDialog);
       keyDialog.addEventListener("click", (event) => { if (event.target === keyDialog) closeKeyDialog(); });
       root.querySelector(".jas-key-settings").addEventListener("click", openKeySettings);
+      root.querySelector(".jas-cost-close").addEventListener("click", () => closeCostEstimate(false));
+      root.querySelector(".jas-cost-cancel").addEventListener("click", () => closeCostEstimate(false));
+      root.querySelector(".jas-cost-confirm").addEventListener("click", () => closeCostEstimate(true));
+      costDialog.addEventListener("click", (event) => { if (event.target === costDialog) closeCostEstimate(false); });
       stopButton.addEventListener("click", () => {
         state.stop = true;
         setStatus("Stopping after the current step…");
         browser.runtime.sendMessage({ type: "JAS_CANCEL" }).catch(() => {});
+        if (!costDialog.hidden) closeCostEstimate(false);
       });
       root.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return;
         if (!keyDialog.hidden) closeKeyDialog();
+        else if (!costDialog.hidden) closeCostEstimate(false);
         else if (!promptDialog.hidden) closePrompt();
       });
       setStatus(state.message);
@@ -333,6 +359,7 @@
     root.querySelector("#jas-load-first").checked = false;
     root.querySelector("#jas-limit-state-posts").checked = false;
     root.querySelector("#jas-external-details").checked = false;
+    root.querySelector("#jas-estimate-cost").checked = false;
     root.querySelector("#jas-posts-per-state").value = "10";
     updateProvider();
     promptDialog.hidden = false;
@@ -398,6 +425,7 @@
       return;
     }
     const externalDetails = provider === "jev" && root.querySelector("#jas-external-details").checked;
+    const estimateCost = provider === "jev" && root.querySelector("#jas-estimate-cost").checked;
     if (externalDetails) {
       const urls = cards().map((job) => job.url).filter(isExternalJobUrl);
       if (urls.length) {
@@ -414,14 +442,104 @@
     }
     const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
     closePrompt();
+    const configuration = { prompt, model, provider, loadRemaining, postsPerState: limitStatePosts ? postsPerState : null, externalDetails };
+    if (estimateCost) {
+      setRunning("estimating", loadRemaining ? advertisedTotal() || cards().length : cards().length);
+      log(`Loading every description for a Jev cost estimate${loadRemaining ? " after all remaining cards load" : ""}. No Jev query will run before confirmation.`);
+      state.operation = estimateThenFilter(configuration);
+      return;
+    }
+    beginFiltering(configuration);
+  }
+
+  function beginFiltering(configuration) {
+    const { prompt, model, provider, loadRemaining, postsPerState, externalDetails } = configuration;
     const jobs = cards();
     for (const job of jobs) {
       job.article.classList.remove("jas-clear", "jas-potential", "jas-irrelevant");
       job.article.querySelector(".jas-grade")?.remove();
     }
     setRunning("reviewing", loadRemaining ? advertisedTotal() || jobs.length : jobs.length);
-    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${limitStatePosts ? ` with at most ${postsPerState} posts per state` : ""}${externalDetails ? " with external descriptions" : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
-    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining, limitStatePosts ? postsPerState : null, externalDetails));
+    log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${postsPerState ? ` with at most ${postsPerState} posts per state` : ""}${externalDetails ? " with external descriptions" : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
+    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining, postsPerState, externalDetails));
+  }
+
+  async function estimateThenFilter(configuration) {
+    const key = searchKey();
+    try {
+      if (configuration.loadRemaining) await loadAllCards(key);
+      if (state.stop) return finish("stopped", "Stopped before the estimate was ready.");
+      const jobs = cards();
+      const estimate = {
+        direct: { requests: 0, tokens: 0, usd: 0 },
+        enhanced: { requests: 0, tokens: 0, usd: 0, selectionRequests: 0, selectionTokens: 0 },
+        detailRequests: 0,
+        cacheHits: 0,
+        pricing: null
+      };
+      for (let offset = 0; offset < jobs.length && !state.stop; offset += 50) {
+        const batch = jobs.slice(offset, offset + 50);
+        setStatus(`Loading descriptions for cost estimate: ${offset} of ${jobs.length} prepared.`);
+        const response = await browser.runtime.sendMessage({
+          type: "JAS_ESTIMATE_JEV_BATCH",
+          prompt: configuration.prompt,
+          postsPerState: configuration.postsPerState,
+          externalDetails: configuration.externalDetails,
+          jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url }))
+        });
+        if (!response?.ok) throw new Error(response?.error || "Could not prepare the Jev estimate.");
+        for (const strategy of ["direct", "enhanced"]) {
+          for (const field of ["requests", "tokens", "usd"]) estimate[strategy][field] += Number(response[strategy][field] || 0);
+        }
+        estimate.enhanced.selectionRequests += Number(response.enhanced.selectionRequests || 0);
+        estimate.enhanced.selectionTokens += Number(response.enhanced.selectionTokens || 0);
+        estimate.detailRequests += Number(response.detailRequests || 0);
+        estimate.cacheHits += Number(response.cacheHits || 0);
+        estimate.pricing = response.pricing;
+      }
+      if (state.stop) return finish("stopped", "Stopped before the estimate was ready.");
+      const confirmed = await showCostEstimate(estimate, jobs.length);
+      if (!confirmed || state.stop) return finish("stopped", "AI filtering cancelled after the cost estimate.");
+      configuration.loadRemaining = false;
+      beginFiltering(configuration);
+    } catch (error) {
+      finish("error", `Cost estimate stopped: ${error.message}`);
+    }
+  }
+
+  function showCostEstimate(estimate, jobCount) {
+    const money = (value) => `$${Number(value).toFixed(value < 0.01 ? 6 : 4)}`;
+    const row = (title, data, note) => {
+      const section = document.createElement("section");
+      for (const [tag, text] of [
+        ["strong", title],
+        ["span", `${data.tokens.toLocaleString()} estimated input tokens`],
+        ["span", `${data.requests.toLocaleString()} requests`],
+        ["b", money(data.usd)],
+        ["small", note]
+      ]) {
+        const element = document.createElement(tag);
+        element.textContent = text;
+        section.append(element);
+      }
+      return section;
+    };
+    root.querySelector(".jas-cost-summary").textContent = `${jobCount} descriptions are loaded and cached. No Jev request has run yet.`;
+    root.querySelector(".jas-cost-options").replaceChildren(
+      row("Direct full details", estimate.direct, "Sends the extracted detail blocks directly to filtering."),
+      row("Enhanced detail selection", estimate.enhanced, `Includes ${estimate.enhanced.selectionRequests} selector requests, then filtering. Uses the selector’s maximum retained detail size, so actual cost can be lower.`)
+    );
+    root.querySelector(".jas-cost-note").textContent = `Estimated at $${estimate.pricing.inputUsdPerMillion} per million input tokens; TypeSafe output tokens are currently free. ${estimate.detailRequests} detail pages loaded now and ${estimate.cacheHits} reused from cache. Actual billed tokens can differ.`;
+    costDialog.hidden = false;
+    root.querySelector(".jas-cost-confirm").focus();
+    return new Promise((resolve) => { costDecision = resolve; });
+  }
+
+  function closeCostEstimate(confirmed) {
+    if (costDialog) costDialog.hidden = true;
+    const resolve = costDecision;
+    costDecision = null;
+    resolve?.(confirmed);
   }
 
   function isExternalJobUrl(value) {

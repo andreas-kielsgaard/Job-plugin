@@ -3,7 +3,7 @@
 #jas-root .jas-panel { position: fixed; z-index: 2147483645; right: 18px; bottom: 18px; width: min(380px, calc(100vw - 36px)); max-height: min(440px, 70vh); display: flex; flex-direction: column; gap: 8px; padding: 14px; background: #fff; border: 1px solid #bbcdc7; border-radius: 12px; box-shadow: 0 10px 35px #152d2950; }
 #jas-root .jas-panel-head, #jas-root .jas-dialog-head, #jas-root .jas-dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 #jas-root .jas-panel-head strong { font-size: 15px; }
-#jas-root .jas-minimize, #jas-root .jas-close, #jas-root .jas-key-close { border: 0; background: transparent; color: #24443c; font: 24px/1 system-ui, sans-serif; cursor: pointer; }
+#jas-root .jas-minimize, #jas-root .jas-close, #jas-root .jas-key-close, #jas-root .jas-cost-close { border: 0; background: transparent; color: #24443c; font: 24px/1 system-ui, sans-serif; cursor: pointer; }
 #jas-root .jas-status { margin: 0; font-weight: 600; }
 #jas-root .jas-log { overflow: auto; min-height: 42px; margin: 0; padding-left: 21px; color: #425a54; font-size: 12px; }
 #jas-root .jas-log li { margin-bottom: 5px; }
@@ -12,11 +12,11 @@
 #jas-root button, #jas-page-controls button { transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease; }
 #jas-root button:not(:disabled):hover, #jas-page-controls button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 10px #173d3030; }
 #jas-root button:not(:disabled):active, #jas-page-controls button:not(:disabled):active { transform: scale(.97); box-shadow: none; }
-#jas-root .jas-stop, #jas-root .jas-cancel, #jas-root .jas-start, #jas-root .jas-key-cancel, #jas-root .jas-key-settings { border: 1px solid #315f52; border-radius: 7px; padding: 8px 12px; background: #fff; color: #214c3f; cursor: pointer; font: inherit; }
-#jas-root .jas-start, #jas-root .jas-key-settings { background: #245744; color: white; }
+#jas-root .jas-stop, #jas-root .jas-cancel, #jas-root .jas-start, #jas-root .jas-key-cancel, #jas-root .jas-key-settings, #jas-root .jas-cost-cancel, #jas-root .jas-cost-confirm { border: 1px solid #315f52; border-radius: 7px; padding: 8px 12px; background: #fff; color: #214c3f; cursor: pointer; font: inherit; }
+#jas-root .jas-start, #jas-root .jas-key-settings, #jas-root .jas-cost-confirm { background: #245744; color: white; }
 #jas-root .jas-start:disabled { opacity: .5; cursor: not-allowed; }
 #jas-root .jas-panel.jas-collapsed > :not(.jas-panel-head) { display: none; }
-#jas-root .jas-overlay:not([hidden]), #jas-root .jas-key-overlay:not([hidden]) { position: fixed; z-index: 2147483646; inset: 0; display: grid; place-items: center; padding: 18px; background: #102b248c; }
+#jas-root .jas-overlay:not([hidden]), #jas-root .jas-key-overlay:not([hidden]), #jas-root .jas-cost-overlay:not([hidden]) { position: fixed; z-index: 2147483646; inset: 0; display: grid; place-items: center; padding: 18px; background: #102b248c; }
 #jas-root .jas-dialog { width: min(560px, 100%); max-height: 90vh; overflow: auto; padding: 24px; border-radius: 14px; background: white; box-shadow: 0 15px 50px #102b2470; }
 #jas-root .jas-dialog h2 { margin: 0; font-size: 21px; }
 #jas-root .jas-dialog p { margin: 14px 0; }
@@ -32,6 +32,12 @@
 #jas-root .jas-field-hint { margin: 7px 0 0 27px !important; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-note { min-height: 20px; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-actions { justify-content: flex-end; }
+#jas-root .jas-cost-options { display: grid; gap: 10px; margin: 18px 0; }
+#jas-root .jas-cost-options section { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 14px; border: 1px solid #bbcdc7; border-radius: 9px; background: #f5faf8; }
+#jas-root .jas-cost-options strong { font-size: 15px; }
+#jas-root .jas-cost-options span, #jas-root .jas-cost-options small { grid-column: 1; color: #526a62; }
+#jas-root .jas-cost-options b { grid-column: 2; grid-row: 1 / span 3; align-self: center; color: #17664f; font-size: 18px; }
+#jas-root .jas-cost-note { color: #586c64; font-size: 12px; }
 #main-content article.jas-clear .card { border-left: 7px solid #24845a; background: #e7f6ec; }
 #main-content article.jas-potential .card { border-left: 7px solid #d79b16; background: #fff6d9; }
 #main-content article.jas-irrelevant .card { border-left: 7px solid #c34747; background: #fde8e7; }
