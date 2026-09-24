@@ -1,7 +1,8 @@
 (() => {
   "use strict";
 
-  if (location.pathname !== "/find-job") return;
+  if (!/^\/find-job\/?$/.test(location.pathname) || globalThis.__jobnetAiSorterLoaded) return;
+  globalThis.__jobnetAiSorterLoaded = true;
 
   const LABELS = { clear: "Clearly relevant", potential: "Potentially relevant", irrelevant: "Explicitly irrelevant" };
   const state = { phase: "idle", done: 0, total: 0, stop: false, operation: null, message: "Ready", metrics: null };

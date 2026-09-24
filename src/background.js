@@ -17,10 +17,33 @@
     if (message.type === "JAS_DELETE_KEY") return deleteKey();
     if (message.type === "JAS_DELETE_JEV_KEY") return deleteJevKey();
     if (message.type === "JAS_OPEN_SETTINGS") return openSettings(message.section);
+    if (message.type === "JAS_ENSURE_PAGE") return ensureSearchContent(message.tabId);
     if (message.type === "JAS_GRADE_BATCH") return gradeBatch(message, sender);
     if (message.type === "JAS_CANCEL") return cancel(sender);
     return undefined;
   });
+
+  hydrateOpenSearchTabs();
+
+  async function hydrateOpenSearchTabs() {
+    const tabs = await browser.tabs.query({ url: "https://jobnet.dk/find-job*" }).catch(() => []);
+    await Promise.all(tabs.map((tab) => ensureSearchContent(tab.id).catch(() => false)));
+  }
+
+  async function ensureSearchContent(tabId) {
+    if (!Number.isInteger(tabId)) return false;
+    const tab = await browser.tabs.get(tabId).catch(() => null);
+    if (!tab || !/^https:\/\/jobnet\.dk\/find-job\/?(?:[?#]|$)/.test(tab.url || "")) return false;
+    try {
+      await browser.tabs.sendMessage(tabId, { type: "JAS_STATUS" });
+      return true;
+    } catch (_) {
+      await browser.tabs.insertCSS(tabId, { file: "src/content.css" });
+      await browser.tabs.executeScript(tabId, { file: "src/ranking.js", runAt: "document_idle" });
+      await browser.tabs.executeScript(tabId, { file: "src/content.js", runAt: "document_idle" });
+      return true;
+    }
+  }
 
   async function getSettings() {
     const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model", "detailLanes"]);
@@ -72,7 +95,7 @@
   }
 
   function validSearchSender(sender) {
-    return sender.tab?.id && /^https:\/\/jobnet\.dk\/find-job(?:[?#]|$)/.test(sender.url || "");
+    return sender.tab?.id && /^https:\/\/jobnet\.dk\/find-job\/?(?:[?#]|$)/.test(sender.url || "");
   }
 
   async function gradeBatch(message, sender) {

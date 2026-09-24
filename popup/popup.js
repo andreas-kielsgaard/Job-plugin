@@ -15,7 +15,7 @@
 
   async function init() {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !/^https:\/\/jobnet\.dk\/find-job(?:[?#]|$)/.test(tab.url || "")) {
+    if (!tab?.id || !/^https:\/\/jobnet\.dk\/find-job\/?(?:[?#]|$)/.test(tab.url || "")) {
       pageStatus.textContent = "Open a Jobnet search page to use loading and filtering.";
       loadButton.disabled = filterButton.disabled = true;
       return;
@@ -26,13 +26,20 @@
 
   async function refresh() {
     try {
-      const status = await browser.tabs.sendMessage(tabId, { type: "JAS_STATUS" });
+      let status;
+      try {
+        status = await browser.tabs.sendMessage(tabId, { type: "JAS_STATUS" });
+      } catch (_) {
+        const ready = await browser.runtime.sendMessage({ type: "JAS_ENSURE_PAGE", tabId });
+        if (!ready) throw new Error("Could not add controls to this Jobnet tab.");
+        status = await browser.tabs.sendMessage(tabId, { type: "JAS_STATUS" });
+      }
       loaded.textContent = String(status.loaded);
       total.textContent = status.advertised ? `${status.advertised.toLocaleString()} results in this search` : "";
       pageStatus.textContent = status.busy ? status.message : status.loaded ? "Ready on this Jobnet search." : "Jobnet is loading results. Reopen the popup shortly.";
       loadButton.disabled = filterButton.disabled = status.busy || !status.loaded;
     } catch (error) {
-      pageStatus.textContent = "Reload this Jobnet tab after loading the extension.";
+      pageStatus.textContent = "Could not add controls to this Jobnet tab. Reload the page and try again.";
       loadButton.disabled = filterButton.disabled = true;
     }
   }
