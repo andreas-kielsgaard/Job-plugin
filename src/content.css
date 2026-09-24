@@ -23,6 +23,11 @@
 #jas-root .jas-dialog label { display: block; margin-bottom: 6px; font-weight: 700; }
 #jas-root .jas-dialog textarea, #jas-root .jas-dialog select, #jas-root .jas-dialog input[type="number"] { width: 100%; padding: 10px; border: 1px solid #78958a; border-radius: 7px; font: inherit; background: white; color: #18302b; }
 #jas-root .jas-dialog textarea { resize: vertical; }
+#jas-root .jas-preferences-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
+#jas-root .jas-preferences-head label { margin: 0; }
+#jas-root .jas-save-preferences { border: 0; padding: 4px 0; background: transparent; color: #17664f; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; text-align: right; }
+#jas-root .jas-save-preferences:disabled { opacity: .58; cursor: wait; }
+#jas-root .jas-preferences-status { min-height: 18px; margin: 4px 0 10px !important; color: #426159; font-size: 12px; }
 #jas-root .jas-dialog .jas-load-option, #jas-root .jas-dialog .jas-check-option { display: flex; gap: 9px; align-items: flex-start; margin-top: 16px; font-weight: 600; }
 #jas-root .jas-load-option[hidden] { display: none; }
 #jas-root .jas-load-option input[type="checkbox"], #jas-root .jas-check-option input[type="checkbox"] { position: static !important; display: block !important; width: 18px !important; height: 18px !important; flex: 0 0 18px; margin: 2px 0 0 !important; opacity: 1 !important; appearance: auto !important; accent-color: #245744; }

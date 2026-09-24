@@ -20,6 +20,7 @@
     if (message.type === "JAS_HAS_KEY") return store.get(["apiKey", "jevApiKey"]).then((data) => ({ hasApiKey: Boolean(data.apiKey), hasJevApiKey: Boolean(data.jevApiKey) }));
     if (message.type === "JAS_GET_MODEL_TYPE") return store.get("model").then((data) => ({ model: JobnetModels.typeOf(data.model) }));
     if (message.type === "JAS_SAVE_SETTINGS") return saveSettings(message.settings);
+    if (message.type === "JAS_SAVE_PREFERENCES") return savePreferences(message.preferences);
     if (message.type === "JAS_DELETE_KEY") return deleteKey();
     if (message.type === "JAS_DELETE_JEV_KEY") return deleteJevKey();
     if (message.type === "JAS_OPEN_SETTINGS") return openSettings(message.section);
@@ -79,6 +80,17 @@
     if (jevApiKey) changes.jevApiKey = jevApiKey;
     await store.set(changes);
     return getSettings();
+  }
+
+  async function savePreferences(value) {
+    await store.set({ preferences: String(value || "").slice(0, 15000) });
+    return { ok: true };
+  }
+
+  function runPreferences(message, data) {
+    return Object.prototype.hasOwnProperty.call(message, "preferences")
+      ? String(message.preferences || "").slice(0, 15000)
+      : data.preferences || "";
   }
 
   async function deleteKey() {
@@ -194,7 +206,7 @@
       if (controller.signal.aborted) throw new DOMException("Stopped.", "AbortError");
       const context = {
         cv: data.cv || "",
-        preferences: data.preferences || "",
+        preferences: runPreferences(message, data),
         prompt: String(message.prompt || "").slice(0, 6000),
         maxPostingsPerState: validPostsPerState(message.postsPerState)
       };
@@ -265,7 +277,7 @@
         apiKey: provider === "jev" ? data.jevApiKey : data.apiKey,
         model,
         cv: data.cv || "",
-        preferences: data.preferences || "",
+        preferences: runPreferences(message, data),
         prompt: String(message.prompt || "").slice(0, 6000),
         detailLanes: validDetailLanes(data.detailLanes),
         maxPostingsPerState: provider === "jev" ? validPostsPerState(message.postsPerState) : null,

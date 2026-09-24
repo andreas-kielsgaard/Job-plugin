@@ -89,6 +89,9 @@
           <p>Your instruction and saved preferences guide relevance. Your CV helps score qualifications and becomes a relevance fallback when no other job preference is provided. Jev loads full descriptions and evaluates paired category and score questions together.</p>
           <label for="jas-prompt">What should the model prioritize for this search?</label>
           <textarea id="jas-prompt" rows="5" maxlength="6000" placeholder="For example: prioritize senior roles in Copenhagen with flexible work; avoid sales positions."></textarea>
+          <div class="jas-preferences-head"><label for="jas-run-preferences">Job preferences for this run</label><button class="jas-save-preferences" type="button">Save job preferences for future runs</button></div>
+          <textarea id="jas-run-preferences" rows="5" maxlength="15000" placeholder="Roles, location, work style, non-negotiables, and anything else that matters"></textarea>
+          <p class="jas-preferences-status" role="status"></p>
           <label for="jas-provider">Provider for this run</label>
           <select id="jas-provider"><option value="claude">Claude</option><option value="jev">TypeSafe Jev</option></select>
           <div class="jas-claude-model"><label for="jas-model">Claude model type for this run</label>
@@ -136,6 +139,7 @@
       root.querySelector(".jas-cancel").addEventListener("click", closePrompt);
       promptDialog.addEventListener("click", (event) => { if (event.target === promptDialog) closePrompt(); });
       root.querySelector(".jas-start").addEventListener("click", startFilter);
+      root.querySelector(".jas-save-preferences").addEventListener("click", saveRunPreferences);
       root.querySelector("#jas-provider").addEventListener("change", updateProvider);
       root.querySelector("#jas-limit-state-posts").addEventListener("change", updateStateStrategy);
       root.querySelector("#jas-estimate-cost").addEventListener("change", (event) => {
@@ -346,10 +350,7 @@
   async function openPrompt() {
     if (state.operation) return { ok: false, error: "Stop the current operation first." };
     ensureUi();
-    const [settings, modelSettings] = await Promise.all([
-      browser.runtime.sendMessage({ type: "JAS_HAS_KEY" }),
-      browser.runtime.sendMessage({ type: "JAS_GET_MODEL_TYPE" })
-    ]);
+    const settings = await browser.runtime.sendMessage({ type: "JAS_GET_SETTINGS" });
     availableKeys = settings;
     if (!availableKeys.hasApiKey && !availableKeys.hasJevApiKey) {
       openKeyDialog();
@@ -357,7 +358,9 @@
     }
     if (availableKeys.hasJevApiKey && !availableKeys.hasApiKey) root.querySelector("#jas-provider").value = "jev";
     if (availableKeys.hasApiKey && !availableKeys.hasJevApiKey) root.querySelector("#jas-provider").value = "claude";
-    root.querySelector("#jas-model").value = modelSettings.model;
+    root.querySelector("#jas-model").value = settings.model;
+    root.querySelector("#jas-run-preferences").value = settings.preferences || "";
+    root.querySelector(".jas-preferences-status").textContent = "";
     const loadOption = root.querySelector(".jas-load-option");
     loadOption.hidden = !loadButton();
     root.querySelector("#jas-load-first").checked = false;
@@ -415,8 +418,29 @@
     if (response?.ok) closeKeyDialog();
   }
 
+  async function saveRunPreferences() {
+    const button = root.querySelector(".jas-save-preferences");
+    const status = root.querySelector(".jas-preferences-status");
+    button.disabled = true;
+    try {
+      const response = await browser.runtime.sendMessage({ type: "JAS_SAVE_PREFERENCES", preferences: root.querySelector("#jas-run-preferences").value });
+      if (!response?.ok) throw new Error(response?.error || "Could not save job preferences.");
+      status.textContent = "Job preferences saved for future runs.";
+      button.textContent = "Saved";
+      setTimeout(() => {
+        button.textContent = "Save job preferences for future runs";
+        status.textContent = "";
+      }, 2200);
+    } catch (error) {
+      status.textContent = `Could not save job preferences: ${error.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   async function startFilter() {
     const prompt = root.querySelector("#jas-prompt").value.trim();
+    const preferences = root.querySelector("#jas-run-preferences").value;
     const model = root.querySelector("#jas-model").value;
     const provider = root.querySelector("#jas-provider").value;
     const hasKey = provider === "jev" ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
@@ -446,7 +470,7 @@
     }
     const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
     closePrompt();
-    const configuration = { prompt, model, provider, loadRemaining, postsPerState: limitStatePosts ? postsPerState : null, externalDetails };
+    const configuration = { prompt, preferences, model, provider, loadRemaining, postsPerState: limitStatePosts ? postsPerState : null, externalDetails };
     if (estimateCost) {
       setRunning("estimating", loadRemaining ? advertisedTotal() || cards().length : cards().length);
       log(`Loading every description for a Jev cost estimate${loadRemaining ? " after all remaining cards load" : ""}. No Jev query will run before confirmation.`);
@@ -457,7 +481,7 @@
   }
 
   function beginFiltering(configuration) {
-    const { prompt, model, provider, loadRemaining, postsPerState, externalDetails } = configuration;
+    const { prompt, preferences, model, provider, loadRemaining, postsPerState, externalDetails } = configuration;
     const jobs = cards();
     for (const job of jobs) {
       job.article.classList.remove("jas-clear", "jas-potential", "jas-irrelevant");
@@ -465,7 +489,7 @@
     }
     setRunning("reviewing", loadRemaining ? advertisedTotal() || jobs.length : jobs.length);
     log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${postsPerState ? ` with at most ${postsPerState} posts per state` : ""}${externalDetails ? " with external descriptions" : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
-    state.operation = Promise.resolve().then(() => filterJobs(prompt, model, provider, loadRemaining, postsPerState, externalDetails));
+    state.operation = Promise.resolve().then(() => filterJobs(prompt, preferences, model, provider, loadRemaining, postsPerState, externalDetails));
   }
 
   async function estimateThenFilter(configuration) {
@@ -487,6 +511,7 @@
         const response = await browser.runtime.sendMessage({
           type: "JAS_ESTIMATE_JEV_BATCH",
           prompt: configuration.prompt,
+          preferences: configuration.preferences,
           postsPerState: configuration.postsPerState,
           externalDetails: configuration.externalDetails,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url }))
@@ -553,7 +578,7 @@
     } catch (_) { return false; }
   }
 
-  async function filterJobs(prompt, model, provider, loadRemaining, postsPerState, externalDetails) {
+  async function filterJobs(prompt, preferences, model, provider, loadRemaining, postsPerState, externalDetails) {
     const key = searchKey();
     const name = provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`;
     const batchSize = provider === "jev" ? 50 : 10;
@@ -584,7 +609,7 @@
         batchNumber += 1;
         setStatus(`Reviewing ${batch.length} posts with ${name}; ${state.done} completed${loadingDone ? "" : `, ${cards().length} loaded so far`}.`);
         log(state.message);
-        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, model, provider, postsPerState, externalDetails,
+        const response = await browser.runtime.sendMessage({ type: "JAS_GRADE_BATCH", prompt, preferences, model, provider, postsPerState, externalDetails,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url })) });
         if (state.stop) break;
         if (!response?.ok) throw new Error(response?.error || `${name} did not return grades.`);

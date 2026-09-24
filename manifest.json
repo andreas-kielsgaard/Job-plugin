@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Jobnet AI Sorter",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Load and rank Jobnet search results with Claude or TypeSafe Jev.",
   "permissions": [
     "storage",
