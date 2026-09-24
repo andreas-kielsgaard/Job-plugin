@@ -127,7 +127,7 @@
         }
         const ready = packer.add(enriched);
         if (ready) enqueue(ready);
-        onActivity(`Loading Jobnet descriptions: ${++completed} of ${jobs.length}; ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"} queued.`, true);
+        onActivity(`Loading job descriptions: ${++completed} of ${jobs.length}; ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"} queued.`, true);
         if (throttle) await pause(150, signal);
       }
     }
@@ -140,7 +140,7 @@
     if (signal?.aborted) throw new DOMException("Stopped.", "AbortError");
     const final = packer.flush();
     if (final) enqueue(final);
-    onActivity(`Descriptions ready: ${reused} cached, ${jobs.length - reused} checked on Jobnet; waiting for ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"}.`);
+    onActivity(`Descriptions ready: ${reused} cached, ${jobs.length - reused} freshly prepared; waiting for ${queuedStates} Jev state ${queuedStates === 1 ? "batch" : "batches"}.`);
     await Promise.all(queryPromises);
     return jobs.map((job) => grades.get(job.id));
   }

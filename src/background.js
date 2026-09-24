@@ -123,10 +123,16 @@
     const origins = [...new Set((Array.isArray(urls) ? urls : []).map(permissionOrigin).filter(Boolean))].slice(0, 50);
     if (!origins.length) return { ok: true, granted: true, origins: [] };
     try {
-      const granted = await browser.permissions.request({ origins });
-      return { ok: true, granted, origins };
+      const missing = [];
+      for (const origin of origins) {
+        if (!await browser.permissions.contains({ origins: [origin] })) missing.push(origin);
+      }
+      if (!missing.length) return { ok: true, granted: true, origins };
+      await store.set({ pendingExternalOrigins: missing });
+      await browser.tabs.create({ url: browser.runtime.getURL("permissions/permissions.html") });
+      return { ok: true, granted: false, opened: true, origins: missing };
     } catch (error) {
-      return { ok: false, error: `Could not request external site access: ${String(error.message || error).slice(0, 300)}` };
+      return { ok: false, error: `Could not prepare external site access: ${String(error.message || error).slice(0, 300)}` };
     }
   }
 

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>External job site access</title>
+  <link rel="stylesheet" href="permissions.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">JOBNET AI SORTER</p>
+    <h1>Allow external job details</h1>
+    <p>Some loaded postings link to employers or recruitment sites. Firefox requires a separate permission before the extension can read those job descriptions.</p>
+    <p>The extension requests only the sites represented in the current search. Requests omit cookies and other browser credentials.</p>
+    <section>
+      <h2>Sites in this request</h2>
+      <ul id="origins"><li>Loading…</li></ul>
+    </section>
+    <p id="status" role="status"></p>
+    <div class="actions">
+      <button id="grant" type="button">Allow these sites</button>
+      <button id="close" type="button" class="secondary">Return to Jobnet</button>
+    </div>
+  </main>
+  <script src="permissions.js"></script>
+</body>
+</html>

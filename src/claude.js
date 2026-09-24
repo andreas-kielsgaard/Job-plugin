@@ -19,14 +19,16 @@
       id: { type: "string" },
       decision: { type: "string", enum: ["exclude", "read_details"] },
       score: { type: "integer", minimum: 0, maximum: 100 },
-      reason: { type: "string", maxLength: 240 }
+      reason: { type: "string", maxLength: 240 },
+      hasContactPhone: { type: "boolean", description: "True only when the search card provides a phone number for contacting someone about the job." }
     });
   const classifyTool = tool("submit_classifications",
     "Classify every posting from its full description without seeing the CV. Summarize the facts needed to assess qualification fit.", {
       id: { type: "string" },
       category: { type: "string", enum: ["clear", "potential", "irrelevant"] },
       reason: { type: "string", maxLength: 240 },
-      scoringBrief: { type: "string", maxLength: 500 }
+      scoringBrief: { type: "string", maxLength: 500 },
+      hasContactPhone: { type: "boolean", description: "True only when the full posting provides a phone number for contacting someone about the job." }
     });
   const scoreTool = tool("submit_scores",
     "Score qualification and overall fit within the fixed relevance group. The group cannot be changed.", {
@@ -95,7 +97,7 @@
       triageTool, signal, onMetrics), jobs);
     const excluded = triage.filter((item) => item.decision === "exclude")
       .map((item) => ({ id: item.id, ...globalThis.JobnetRanking.normalizeGrade({
-        category: "irrelevant", score: item.score, reason: item.reason
+        category: "irrelevant", score: item.score, reason: item.reason, hasContactPhone: item.hasContactPhone
       }) }));
     const excludedIds = new Set(excluded.map((item) => item.id));
     const remaining = jobs.filter((job) => !excludedIds.has(job.id));
@@ -125,7 +127,7 @@
     }
     await Promise.all(Array.from({ length: Math.min(2, remaining.length) }, worker));
     if (signal?.aborted) throw new DOMException("Stopped.", "AbortError");
-    onActivity(`Descriptions ready: ${reused} cached, ${remaining.length - reused} checked on Jobnet.`);
+    onActivity(`Descriptions ready: ${reused} cached, ${remaining.length - reused} freshly prepared.`);
     onActivity(`Classifying ${remaining.length} full descriptions without CV influence.`);
     const classified = checked(await request(apiKey, model,
       `${drivers}\n\nJobnet postings with cleaned details (JSON):\n${JSON.stringify(enriched)}\n\nClassify relevance from the instruction, preferences, and job text only. An unavailable detail leaves unknown requirements potential. Provide a short scoringBrief with duties, qualifications, location and work style. Return one row per ID.`,
@@ -133,7 +135,8 @@
       .map((item) => ({ id: item.id,
         category: globalThis.JobnetRanking.normalizeGrade({ category: item.category, score: 0, reason: item.reason }).category,
         relevanceReason: String(item.reason || "").slice(0, 240),
-        scoringBrief: String(item.scoringBrief || "").slice(0, 500)
+        scoringBrief: String(item.scoringBrief || "").slice(0, 500),
+        hasContactPhone: item.hasContactPhone === true
       }));
     onActivity(`Scoring qualifications for ${remaining.length} classified postings.`);
     const scores = checked(await request(apiKey, model,
@@ -141,7 +144,8 @@
       scoreTool, signal, onMetrics), remaining);
     const byId = new Map(classified.map((item) => [item.id, item]));
     const grades = scores.map((item) => ({ id: item.id, ...globalThis.JobnetRanking.normalizeGrade({
-      category: byId.get(item.id).category, score: item.score, reason: item.reason
+      category: byId.get(item.id).category, score: item.score, reason: item.reason,
+      hasContactPhone: byId.get(item.id).hasContactPhone
     }) }));
     return [...excluded, ...grades];
   }

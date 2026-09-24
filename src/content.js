@@ -144,12 +144,6 @@
       root.querySelector(".jas-start").addEventListener("click", startFilter);
       root.querySelector(".jas-save-preferences").addEventListener("click", saveRunPreferences);
       root.querySelector("#jas-provider").addEventListener("change", updateProvider);
-      root.querySelector("#jas-estimate-cost").addEventListener("change", (event) => {
-        if (event.target.checked) root.querySelector("#jas-external-details").checked = true;
-      });
-      root.querySelector("#jas-external-details").addEventListener("change", (event) => {
-        if (!event.target.checked) root.querySelector("#jas-estimate-cost").checked = false;
-      });
       root.querySelector(".jas-key-close").addEventListener("click", closeKeyDialog);
       root.querySelector(".jas-key-cancel").addEventListener("click", closeKeyDialog);
       keyDialog.addEventListener("click", (event) => { if (event.target === keyDialog) closeKeyDialog(); });
@@ -450,7 +444,9 @@
         const access = await browser.runtime.sendMessage({ type: "JAS_REQUEST_EXTERNAL_ACCESS", urls }).catch((error) => ({ ok: false, error: error.message }));
         startButton.disabled = false;
         if (!access?.ok || !access.granted) {
-          root.querySelector(".jas-dialog-note").textContent = access?.error || "External site access was not granted. Uncheck external descriptions or grant access to continue.";
+          root.querySelector(".jas-dialog-note").textContent = access?.opened
+            ? "Firefox opened an extension page for external site access. Grant access there, return to Jobnet, and start again."
+            : access?.error || "External site access was not granted. Uncheck external descriptions or grant access to continue.";
           return;
         }
       }
