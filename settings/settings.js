@@ -12,10 +12,13 @@
   const keyStatus = document.getElementById("keyStatus");
   const jevKeyStatus = document.getElementById("jevKeyStatus");
   const notice = document.getElementById("notice");
+  const saveButton = form.querySelector('button[type="submit"]');
   const tabs = [...document.querySelectorAll('[role="tab"]')];
   const panels = { model: document.getElementById("model-panel"), profile: document.getElementById("profile-panel") };
   let noticeTimer;
+  let settingsLoaded = false;
 
+  saveButton.disabled = true;
   load().finally(focusRequestedField);
   window.addEventListener("hashchange", focusRequestedField);
   tabs.forEach((tab) => {
@@ -31,6 +34,10 @@
   pdfInput.addEventListener("change", importPdf);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!settingsLoaded) {
+      notice.textContent = "Wait for settings to finish loading.";
+      return;
+    }
     try {
       const settings = await browser.runtime.sendMessage({ type: "JAS_SAVE_SETTINGS", settings: {
         apiKey: key.value, jevApiKey: jevKey.value, cv: cv.value, preferences: preferences.value,
@@ -115,6 +122,8 @@
       detailLanes.value = String(settings.detailLanes);
       renderKey(settings.hasApiKey);
       renderJevKey(settings.hasJevApiKey);
+      settingsLoaded = true;
+      saveButton.disabled = false;
     } catch (error) {
       notice.textContent = `Could not load settings: ${error.message}`;
     }
