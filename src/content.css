@@ -12,9 +12,9 @@
 #jas-root button, #jas-page-controls button { transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease; }
 #jas-root button:not(:disabled):hover, #jas-page-controls button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 4px 10px #173d3030; }
 #jas-root button:not(:disabled):active, #jas-page-controls button:not(:disabled):active { transform: scale(.97); box-shadow: none; }
-#jas-root .jas-stop, #jas-root .jas-cancel, #jas-root .jas-start, #jas-root .jas-key-cancel, #jas-root .jas-key-settings, #jas-root .jas-cost-cancel, #jas-root .jas-cost-confirm { border: 1px solid #315f52; border-radius: 7px; padding: 8px 12px; background: #fff; color: #214c3f; cursor: pointer; font: inherit; }
+#jas-root .jas-stop, #jas-root .jas-cancel, #jas-root .jas-start, #jas-root .jas-key-cancel, #jas-root .jas-key-settings, #jas-root .jas-cost-edit, #jas-root .jas-cost-cancel, #jas-root .jas-cost-confirm { border: 1px solid #315f52; border-radius: 7px; padding: 8px 12px; background: #fff; color: #214c3f; cursor: pointer; font: inherit; }
 #jas-root .jas-start, #jas-root .jas-key-settings, #jas-root .jas-cost-confirm { background: #245744; color: white; }
-#jas-root .jas-start:disabled { opacity: .5; cursor: not-allowed; }
+#jas-root button:disabled { opacity: .5; cursor: not-allowed; }
 #jas-root .jas-panel.jas-collapsed > :not(.jas-panel-head) { display: none; }
 #jas-root .jas-overlay:not([hidden]), #jas-root .jas-key-overlay:not([hidden]), #jas-root .jas-cost-overlay:not([hidden]) { position: fixed; z-index: 2147483646; inset: 0; display: grid; place-items: center; padding: 18px; background: #102b248c; }
 #jas-root .jas-dialog { width: min(560px, 100%); max-height: 90vh; overflow: auto; padding: 24px; border-radius: 14px; background: white; box-shadow: 0 15px 50px #102b2470; }
@@ -31,6 +31,8 @@
 #jas-root #jas-provider { appearance: auto !important; border: 2px solid #4f7f70; background-color: #f4faf7; cursor: pointer; font-weight: 700; }
 #jas-root .jas-dialog .jas-load-option, #jas-root .jas-dialog .jas-check-option { display: flex; gap: 9px; align-items: flex-start; margin-top: 16px; font-weight: 600; }
 #jas-root .jas-load-option[hidden] { display: none; }
+#jas-root .jas-load-hint { margin: 5px 0 14px 27px !important; color: #586c64; font-size: 12px; }
+#jas-root .jas-load-hint[hidden] { display: none; }
 #jas-root .jas-load-option input[type="checkbox"], #jas-root .jas-check-option input[type="checkbox"] { position: static !important; display: block !important; width: 18px !important; height: 18px !important; flex: 0 0 18px; margin: 2px 0 0 !important; opacity: 1 !important; appearance: auto !important; accent-color: #245744; }
 #jas-root .jas-state-count { display: grid; grid-template-columns: 1fr 110px; align-items: center; gap: 12px; margin: 10px 0 0 27px; }
 #jas-root .jas-state-count[hidden] { display: none; }
@@ -38,6 +40,13 @@
 #jas-root .jas-field-hint { margin: 7px 0 0 27px !important; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-note { min-height: 20px; color: #586c64; font-size: 12px; }
 #jas-root .jas-dialog-actions { justify-content: flex-end; }
+#jas-root .jas-action-spacer { flex: 1; }
+#jas-root .jas-cost-progress { display: flex; align-items: center; gap: 9px; min-height: 38px; margin: 12px 0; padding: 9px 11px; border-radius: 8px; background: #edf7f3; color: #285b4b; font-weight: 650; }
+#jas-root .jas-cost-progress[hidden] { display: none; }
+#jas-root .jas-cost-progress.jas-error { background: #fff2e8; color: #8a4423; }
+#jas-root .jas-cost-progress.jas-error .jas-spinner { animation: none; border-color: currentColor; }
+#jas-root .jas-spinner { width: 18px; height: 18px; flex: 0 0 18px; border: 2px solid #97c3b4; border-top-color: #17664f; border-radius: 50%; animation: jas-spin .75s linear infinite; }
+@keyframes jas-spin { to { transform: rotate(360deg); } }
 #jas-root .jas-cost-options { display: grid; gap: 10px; margin: 18px 0; }
 #jas-root .jas-cost-options section { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; padding: 14px; border: 1px solid #bbcdc7; border-radius: 9px; background: #f5faf8; }
 #jas-root .jas-cost-options strong { font-size: 15px; }
@@ -72,4 +81,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   #jas-root button, #jas-page-controls button { transition: none; }
+  #jas-root .jas-spinner { animation: none; }
 }

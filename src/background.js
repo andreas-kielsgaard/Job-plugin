@@ -21,6 +21,8 @@
     if (message.type === "JAS_GET_MODEL_TYPE") return store.get("model").then((data) => ({ model: JobnetModels.typeOf(data.model) }));
     if (message.type === "JAS_SAVE_SETTINGS") return saveSettings(message.settings);
     if (message.type === "JAS_SAVE_PREFERENCES") return savePreferences(message.preferences);
+    if (message.type === "JAS_SAVE_RUN_DRAFT") return saveRunDraft(message.draft);
+    if (message.type === "JAS_CLEAR_RUN_DRAFT") return clearRunDraft();
     if (message.type === "JAS_DELETE_KEY") return deleteKey();
     if (message.type === "JAS_DELETE_JEV_KEY") return deleteJevKey();
     if (message.type === "JAS_OPEN_SETTINGS") return openSettings(message.section);
@@ -55,14 +57,18 @@
   }
 
   async function getSettings() {
-    const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model", "detailLanes"]);
+    const data = await store.get(["apiKey", "jevApiKey", "cv", "preferences", "model", "detailLanes", "runDraft"]);
     return {
       hasApiKey: Boolean(data.apiKey),
       hasJevApiKey: Boolean(data.jevApiKey),
       cv: data.cv || "",
       preferences: data.preferences || "",
       model: JobnetModels.typeOf(data.model || DEFAULT_MODEL),
-      detailLanes: validDetailLanes(data.detailLanes)
+      detailLanes: validDetailLanes(data.detailLanes),
+      runDraft: data.runDraft && typeof data.runDraft === "object" ? {
+        prompt: String(data.runDraft.prompt || "").slice(0, 6000),
+        preferences: String(data.runDraft.preferences || "").slice(0, 15000)
+      } : null
     };
   }
 
@@ -84,6 +90,20 @@
 
   async function savePreferences(value) {
     await store.set({ preferences: String(value || "").slice(0, 15000) });
+    return { ok: true };
+  }
+
+  async function saveRunDraft(raw) {
+    const draft = raw && typeof raw === "object" ? raw : {};
+    await store.set({ runDraft: {
+      prompt: String(draft.prompt || "").slice(0, 6000),
+      preferences: String(draft.preferences || "").slice(0, 15000)
+    } });
+    return { ok: true };
+  }
+
+  async function clearRunDraft() {
+    await store.remove("runDraft");
     return { ok: true };
   }
 

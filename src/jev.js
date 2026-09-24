@@ -5,6 +5,13 @@
   const MODEL = "jev-latest";
   const evaluation = globalThis.JobnetJevEvaluation;
 
+  function apiError(data, fallback) {
+    const value = data?.error?.message ?? data?.error ?? data?.detail ?? fallback;
+    if (typeof value === "string") return value;
+    try { return JSON.stringify(value); }
+    catch (_) { return String(fallback || "Request failed"); }
+  }
+
   function pause(ms, signal) {
     return new Promise((resolve, reject) => {
       if (signal?.aborted) return reject(new DOMException("Stopped.", "AbortError"));
@@ -34,7 +41,7 @@
           await pause(1000 * (2 ** attempt), signal);
           continue;
         }
-        if (!response.ok) throw new Error(`TypeSafe API ${response.status}: ${String(data.error?.message || data.detail || response.statusText).slice(0, 300)}`);
+        if (!response.ok) throw new Error(`TypeSafe API ${response.status}: ${apiError(data, response.statusText).slice(0, 300)}`);
         if (!data.answers || typeof data.answers !== "object") throw new Error("TypeSafe returned no answers.");
         onMetrics?.({ elapsedMs: Date.now() - started, inputTokens: Number(data.usage?.input_tokens || 0),
           outputTokens: Number(data.usage?.output_tokens || 0), cacheCreationTokens: 0, cacheReadTokens: 0 });

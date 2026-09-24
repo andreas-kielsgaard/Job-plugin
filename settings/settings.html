@@ -5,11 +5,17 @@
   <main>
     <header><p class="eyebrow">JOBNET AI SORTER</p></header>
     <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
-      <button id="model-tab" type="button" role="tab" aria-selected="true" aria-controls="model-panel" data-tab="model">Model settings</button>
+      <button id="model-tab" type="button" role="tab" aria-selected="true" aria-controls="model-panel" data-tab="model">Technical Settings</button>
       <button id="profile-tab" type="button" role="tab" aria-selected="false" aria-controls="profile-panel" data-tab="profile" tabindex="-1">User profile</button>
     </nav>
     <form id="settingsForm">
       <div id="model-panel" class="settings-panel" role="tabpanel" aria-labelledby="model-tab">
+        <section>
+          <h2>Detail loading</h2>
+          <label for="detailLanes">Parallel detail loading pages</label>
+          <select id="detailLanes" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
+          <p class="hint">To get the details of each job post, the plugin needs to load the web page that the post links to. This number determines how many pages the plugin can load at once, making detail loading faster. Setting it too high is bad manners and might get you flagged for data scraping.</p>
+        </section>
         <details id="jev-settings" class="provider-card">
           <summary><span><strong>TypeSafe Jev</strong><small>Fast structured job classification and scoring</small></span><span class="recommended">Recommended</span></summary>
           <div class="provider-content">
@@ -18,9 +24,6 @@
             <p class="security-note">Stored in Firefox extension storage and used only by the extension background process for direct TypeSafe requests. It is never inserted into Jobnet pages.</p>
             <p id="jevKeyStatus" class="hint"></p>
             <button id="deleteJevKey" type="button" class="text-button">Remove saved TypeSafe key</button>
-            <label for="detailLanes">Parallel Jobnet detail lanes</label>
-            <select id="detailLanes" required><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
-            <p class="hint">Three lanes balance throughput and load on Jobnet. Detail loading continues while Jev evaluates completed state batches.</p>
           </div>
         </details>
         <details id="claude-settings" class="provider-card">
