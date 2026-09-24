@@ -13,6 +13,7 @@
   const detailInflight = new Map();
   const inspectionInflight = new Map();
   const originQueues = new Map();
+  const estimateSessions = new Map();
 
   browser.runtime.onMessage.addListener((message, sender) => {
     if (!message || typeof message !== "object") return undefined;
@@ -27,8 +28,8 @@
     if (message.type === "JAS_DELETE_JEV_KEY") return deleteJevKey();
     if (message.type === "JAS_OPEN_SETTINGS") return openSettings(message.section);
     if (message.type === "JAS_ENSURE_PAGE") return ensureSearchContent(message.tabId);
-    if (message.type === "JAS_REQUEST_EXTERNAL_ACCESS") return requestExternalAccess(message.urls, sender);
     if (message.type === "JAS_ESTIMATE_JEV_BATCH") return estimateJevBatch(message, sender);
+    if (message.type === "JAS_CLEAR_ESTIMATE_SESSION") return clearEstimateSession(message.sessionId, sender);
     if (message.type === "JAS_GRADE_BATCH") return gradeBatch(message, sender);
     if (message.type === "JAS_CANCEL") return cancel(sender);
     return undefined;
@@ -138,30 +139,16 @@
     return sender.tab?.id && /^https:\/\/jobnet\.dk\/find-job\/?(?:[?#]|$)/.test(sender.url || "");
   }
 
-  async function requestExternalAccess(urls, sender) {
-    if (!validSearchSender(sender)) return { ok: false, error: "Open a Jobnet search page." };
-    const origins = [...new Set((Array.isArray(urls) ? urls : []).map(permissionOrigin).filter(Boolean))].slice(0, 50);
-    if (!origins.length) return { ok: true, granted: true, origins: [] };
-    try {
-      const missing = [];
-      for (const origin of origins) {
-        if (!await browser.permissions.contains({ origins: [origin] })) missing.push(origin);
-      }
-      if (!missing.length) return { ok: true, granted: true, origins };
-      await store.set({ pendingExternalOrigins: missing });
-      await browser.tabs.create({ url: browser.runtime.getURL("permissions/permissions.html") });
-      return { ok: true, granted: false, opened: true, origins: missing };
-    } catch (error) {
-      return { ok: false, error: `Could not prepare external site access: ${String(error.message || error).slice(0, 300)}` };
-    }
+  function estimateSessionKey(tabId, value) {
+    const sessionId = String(value || "").slice(0, 100);
+    return sessionId ? `${tabId}:${sessionId}` : null;
   }
 
-  function permissionOrigin(value) {
-    try {
-      const url = new URL(String(value || ""));
-      if (url.protocol !== "https:" || url.hostname === "jobnet.dk" || url.hostname.endsWith(".jobnet.dk")) return null;
-      return `${url.origin}/*`;
-    } catch (_) { return null; }
+  function clearEstimateSession(sessionId, sender) {
+    if (!validSearchSender(sender)) return { ok: false };
+    const key = estimateSessionKey(sender.tab.id, sessionId);
+    if (key) estimateSessions.delete(key);
+    return { ok: true };
   }
 
   async function estimateJevBatch(message, sender) {
@@ -172,6 +159,9 @@
     if (!data.jevApiKey) return { ok: false, error: "Save a TypeSafe Jev API key in settings first." };
     const jobs = prepareJobs(message.jobs, 50);
     if (!jobs.ok) return jobs;
+    const sessionKey = estimateSessionKey(tabId, message.sessionId);
+    const prepared = sessionKey ? estimateSessions.get(sessionKey) || new Map() : new Map();
+    if (sessionKey) estimateSessions.set(sessionKey, prepared);
     const controller = new AbortController();
     controllers.set(tabId, controller);
     try {
@@ -189,24 +179,31 @@
         while (next < jobs.value.length && !controller.signal.aborted) {
           const index = next++;
           const job = jobs.value[index];
-          let directText;
-          let enhancedText;
+          let item = prepared.get(job.id);
           try {
-            if (isExternal(job.url) && externalDetails) {
+            const needsExternal = isExternal(job.url) && externalDetails && (!item || item.url !== job.url || !item.externalPrepared);
+            if (needsExternal) {
               const loaded = await cachedExternalInspection(job, controller.signal, onActivity);
+              const fallbackText = externalFallback(job);
               if (loaded.inspection) {
                 const fullText = inspectionText(loaded.inspection, 50000);
-                directText = fullText || externalFallback(job);
-                enhancedText = inspectionText(loaded.inspection, 12000) || externalFallback(job);
                 const selector = JobnetJevCost.selection(loaded.inspection);
-                selectionRequests += selector.requests;
-                selectionTokens += selector.tokens;
+                item = {
+                  url: job.url,
+                  external: true,
+                  externalPrepared: true,
+                  fallbackText,
+                  directText: fullText || fallbackText,
+                  enhancedText: inspectionText(loaded.inspection, 12000) || fallbackText,
+                  selector
+                };
                 if (loaded.fromCache) cacheHits += 1; else detailRequests += 1;
               } else {
-                directText = enhancedText = externalFallback(job);
+                item = { url: job.url, external: true, externalPrepared: true, fallbackText, directText: fallbackText, enhancedText: fallbackText, selector: { requests: 0, tokens: 0 } };
                 if (loaded.fromCache) cacheHits += 1; else detailRequests += 1;
               }
-            } else {
+              prepared.set(job.id, item);
+            } else if (!item || item.url !== job.url) {
               const detail = await cachedJobDetails(job, {
                 externalDetails: false,
                 apiKey: data.jevApiKey,
@@ -214,14 +211,28 @@
                 onMetrics: () => {},
                 signal: controller.signal
               });
-              directText = enhancedText = detail.text;
+              item = isExternal(job.url)
+                ? { url: job.url, external: true, externalPrepared: false, fallbackText: detail.text, directText: detail.text, enhancedText: detail.text, selector: { requests: 0, tokens: 0 } }
+                : { url: job.url, external: false, externalPrepared: true, fallbackText: detail.text, directText: detail.text, enhancedText: detail.text, selector: { requests: 0, tokens: 0 } };
+              prepared.set(job.id, item);
               if (detail.fromCache) cacheHits += 1; else detailRequests += 1;
+            } else {
+              cacheHits += 1;
             }
           } catch (error) {
             if (controller.signal.aborted) throw error;
-            directText = enhancedText = `${job.title}\n\n${job.summary}\n\nFull description unavailable; estimate based on the Jobnet card.`;
+            const fallbackText = `${job.title}\n\n${job.summary}\n\nFull description unavailable; estimate based on the Jobnet card.`;
+            item = { url: job.url, external: isExternal(job.url), externalPrepared: externalDetails, fallbackText, directText: fallbackText, enhancedText: fallbackText, selector: { requests: 0, tokens: 0 } };
+            prepared.set(job.id, item);
             detailRequests += 1;
             onActivity(`Description unavailable for ${job.title}; estimating from its Jobnet card.`);
+          }
+          const useExternal = externalDetails && item.external && item.externalPrepared;
+          const directText = useExternal ? item.directText : item.fallbackText;
+          const enhancedText = useExternal ? item.enhancedText : item.fallbackText;
+          if (useExternal) {
+            selectionRequests += item.selector.requests;
+            selectionTokens += item.selector.tokens;
           }
           directJobs[index] = { ...job, details: directText };
           enhancedJobs[index] = { ...job, details: enhancedText };
@@ -334,6 +345,7 @@
   function cancel(sender) {
     if (!validSearchSender(sender)) return { ok: false };
     controllers.get(sender.tab.id)?.abort();
+    for (const key of estimateSessions.keys()) if (key.startsWith(`${sender.tab.id}:`)) estimateSessions.delete(key);
     return { ok: true };
   }
 
@@ -405,8 +417,6 @@
     } catch (_) { /* Inspection cache failures fall through to a fresh request. */ }
     if (inspectionInflight.has(cacheKey)) return inspectionInflight.get(cacheKey);
     const pending = (async () => {
-      const permission = permissionOrigin(job.url);
-      if (!permission || !(await browser.permissions.contains({ origins: [permission] }))) return { inspection: null, fromCache: true };
       const origin = new URL(job.url).origin;
       return withOriginQueue(origin, async () => {
         onActivity(`Loading external page for ${job.title}.`, true);

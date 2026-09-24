@@ -5,7 +5,7 @@
   globalThis.__jobnetAiSorterLoaded = true;
 
   const LABELS = { clear: "Clearly relevant", potential: "Potentially relevant", irrelevant: "Explicitly irrelevant" };
-  const state = { phase: "idle", done: 0, total: 0, stop: false, stopLoading: false, loadingPosts: false, operation: null, message: "Ready", metrics: null };
+  const state = { phase: "idle", done: 0, total: 0, stop: false, stopLoading: false, loadingPosts: false, operation: null, message: "Ready", metrics: null, estimatedCostUsd: null };
   let root;
   let logList;
   let statusText;
@@ -183,7 +183,7 @@
       pageControls.setAttribute("aria-label", "Jobnet AI Sorter controls");
       pageControls.innerHTML = `
         <div class="jas-page-heading"><div><span>JOBNET AI SORTER</span><strong>Search assistant</strong></div><small>v${browser.runtime.getManifest().version}</small></div>
-        <p class="jas-page-summary"></p>
+        <p class="jas-page-summary"><span class="jas-page-spinner" aria-hidden="true"></span><span class="jas-page-summary-text"></span></p>
         <div class="jas-page-actions"><button class="jas-page-load" type="button">Load all posts</button><button class="jas-page-filter" type="button">Filter loaded posts with AI</button><button class="jas-page-settings" type="button">Settings</button></div>`;
       pageControls.querySelector(".jas-page-load").addEventListener("click", togglePageLoading);
       pageControls.querySelector(".jas-page-filter").addEventListener("click", openPrompt);
@@ -205,7 +205,11 @@
     if (!pageControls?.isConnected) return;
     const loaded = cards().length;
     const total = advertisedTotal();
-    pageControls.querySelector(".jas-page-summary").textContent = state.operation ? state.message : `${loaded} posts loaded${total ? ` of ${total.toLocaleString()}` : ""}.`;
+    const running = ["loading", "estimating", "reviewing"].includes(state.phase);
+    pageControls.querySelector(".jas-page-spinner").hidden = !running;
+    pageControls.querySelector(".jas-page-summary-text").textContent = running
+      ? (state.phase === "loading" ? "Loading posts" : "Running query")
+      : `${loaded} posts loaded${total ? ` of ${total.toLocaleString()}` : ""}.`;
     const loadControl = pageControls.querySelector(".jas-page-load");
     loadControl.textContent = state.loadingPosts ? "Stop loading" : "Load all posts";
     loadControl.disabled = state.loadingPosts ? false : Boolean(state.operation) || !loaded || !loadButton();
@@ -255,6 +259,7 @@
     state.total = total;
     state.stop = false;
     state.stopLoading = false;
+    state.estimatedCostUsd = null;
     state.metrics = { requests: 0, elapsedMs: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0, detailRequests: 0, cacheHits: 0 };
     stopButton.hidden = false;
     root.querySelector(".jas-panel").classList.remove("jas-collapsed");
@@ -268,8 +273,16 @@
     state.stopLoading = false;
     activeEstimate = null;
     stopButton.hidden = true;
-    setStatus(text);
-    log(text);
+    const finalText = phase === "done" && Number.isFinite(state.estimatedCostUsd)
+      ? `${text} Estimated cost: ${formatCost(state.estimatedCostUsd)}.`
+      : text;
+    setStatus(finalText);
+    log(finalText);
+  }
+
+  function formatCost(value) {
+    const amount = Number(value);
+    return `$${amount.toFixed(amount < 0.01 ? 6 : 4)}`;
   }
 
   function togglePageLoading() {
@@ -515,9 +528,8 @@
     const provider = root.querySelector("#jas-provider").value;
     const hasKey = provider === "jev" ? availableKeys.hasJevApiKey : availableKeys.hasApiKey;
     if (!hasKey) { openKeyDialog(provider); return; }
-    if (!prompt) { root.querySelector(".jas-dialog-note").textContent = "Enter an instruction for this run."; return; }
     const loadRemaining = !root.querySelector(".jas-load-option").hidden && root.querySelector("#jas-load-first").checked;
-    const configuration = { prompt, preferences, model, provider, loadRemaining, postsPerState: null, externalDetails: false };
+    const configuration = { prompt, preferences, model, provider, loadRemaining, postsPerState: null, externalDetails: provider === "jev", estimatedCostUsd: null };
     if (activeEstimate) {
       Object.assign(activeEstimate.configuration, configuration, {
         postsPerState: selectedPostsPerState(),
@@ -540,7 +552,7 @@
   }
 
   function beginFiltering(configuration) {
-    const { prompt, preferences, model, provider, loadRemaining, postsPerState, externalDetails } = configuration;
+    const { prompt, preferences, model, provider, loadRemaining, postsPerState, externalDetails, estimatedCostUsd } = configuration;
     const jobs = cards();
     for (const job of jobs) {
       job.article.classList.remove("jas-clear", "jas-potential", "jas-irrelevant");
@@ -548,6 +560,7 @@
     }
     clearRunDraft();
     setRunning("reviewing", loadRemaining ? advertisedTotal() || jobs.length : jobs.length);
+    state.estimatedCostUsd = Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null;
     log(`Started ${provider === "jev" ? "TypeSafe Jev" : `Claude ${model}`} review of ${jobs.length} loaded posts${postsPerState ? ` with at most ${postsPerState} posts per state` : ""}${externalDetails ? " with external descriptions" : ""}${loadRemaining ? " while Jobnet continues loading" : ""}.`);
     state.operation = Promise.resolve().then(() => filterJobs(prompt, preferences, model, provider, loadRemaining, postsPerState, externalDetails));
   }
@@ -563,7 +576,8 @@
       loadingPromise: null,
       latestEstimate: null,
       latestJobs: [],
-      resolveDecision: null
+      resolveDecision: null,
+      id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`
     };
     activeEstimate = session;
     const decisionPromise = openCostEstimate(session);
@@ -571,14 +585,22 @@
       queueEstimateRefresh(session);
       if (configuration.loadRemaining) startEstimatePagination(session);
       const decision = await decisionPromise;
-      if (!decision.confirmed || state.stop) return finish("stopped", "AI filtering cancelled after the cost estimate.");
+      if (!decision.confirmed || state.stop) {
+        clearEstimateSession(session);
+        return finish("stopped", "AI filtering cancelled after the cost estimate.");
+      }
       await session.refreshPromise;
       if (session.estimating || state.loadingPosts) throw new Error("Wait for post loading and the estimate to finish.");
       configuration.postsPerState = decision.postsPerState;
       configuration.externalDetails = decision.externalDetails;
+      configuration.estimatedCostUsd = decision.externalDetails
+        ? session.latestEstimate?.enhanced?.usd
+        : session.latestEstimate?.direct?.usd;
       configuration.loadRemaining = false;
+      clearEstimateSession(session);
       beginFiltering(configuration);
     } catch (error) {
+      clearEstimateSession(session);
       finish("error", `Cost estimate stopped: ${error.message}`);
     }
   }
@@ -599,7 +621,7 @@
     updateEstimateProgress(session, `Loading remaining posts while estimating ${cards().length} loaded posts…`);
   }
 
-  async function calculateJevEstimate(configuration, jobs) {
+  async function calculateJevEstimate(configuration, jobs, sessionId) {
       const estimate = {
         direct: { requests: 0, tokens: 0, usd: 0 },
         enhanced: { requests: 0, tokens: 0, usd: 0, selectionRequests: 0, selectionTokens: 0 },
@@ -616,6 +638,7 @@
           preferences: configuration.preferences,
           postsPerState: configuration.postsPerState,
           externalDetails: configuration.externalDetails,
+          sessionId,
           jobs: batch.map((job) => ({ id: job.id, title: job.title, summary: job.summary, url: job.url }))
         });
         if (!response?.ok) throw new Error(response?.error || "Could not prepare the Jev estimate.");
@@ -659,7 +682,7 @@
         row("Direct full details", estimate.direct, "Sends the extracted detail blocks directly to filtering."),
         row("Enhanced detail selection", estimate.enhanced, `Includes ${estimate.enhanced.selectionRequests} selector requests, then filtering. Uses the selector’s maximum retained detail size, so actual cost can be lower.`)
       );
-      root.querySelector(".jas-cost-note").textContent = `Estimated at $${estimate.pricing.inputUsdPerMillion} per million input tokens; TypeSafe output tokens are currently free. ${estimate.detailRequests} detail pages loaded now and ${estimate.cacheHits} reused from cache. Actual billed tokens can differ.`;
+      root.querySelector(".jas-cost-note").textContent = "Actual billed tokens can differ.";
     };
     session.render = render;
     const recalculate = () => {
@@ -670,7 +693,8 @@
       queueEstimateRefresh(session);
     };
     limit.checked = false;
-    external.checked = false;
+    external.checked = true;
+    session.configuration.externalDetails = true;
     externalStrategy.hidden = !cards().some((job) => isExternalJobUrl(job.url));
     count.value = "10";
     countRow.hidden = true;
@@ -719,23 +743,14 @@
         const jobs = cards();
         session.latestJobs = jobs;
         root.querySelector(".jas-cost-external-strategy").hidden = !jobs.some((job) => isExternalJobUrl(job.url));
-        if (configuration.externalDetails) {
-          const urls = jobs.map((job) => job.url).filter(isExternalJobUrl);
-          updateEstimateProgress(session, `Checking access to ${new Set(urls.map((url) => new URL(url).origin)).size} external job sites…`);
-          const access = await browser.runtime.sendMessage({ type: "JAS_REQUEST_EXTERNAL_ACCESS", urls }).catch((error) => ({ ok: false, error: error.message }));
-          if (!access?.ok || !access.granted) {
-            root.querySelector("#jas-external-details").checked = false;
-            session.configuration.externalDetails = false;
-            updateEstimateProgress(session, access?.opened
-              ? "Firefox opened an extension page. Grant access there, return to Jobnet, then enable this option again."
-              : access?.error || "External site access was not granted.", true);
-            session.estimating = false;
-            continue;
-          }
-        }
         try {
-          updateEstimateProgress(session, configuration.externalDetails ? "Fetching external details and updating the estimate…" : `Preparing an estimate for ${jobs.length} loaded posts…`);
-          const estimate = await calculateJevEstimate(configuration, jobs);
+          const progressText = session.latestEstimate
+            ? "Updating the estimate from prepared job details…"
+            : configuration.externalDetails
+              ? "Fetching external details and preparing the estimate…"
+              : `Preparing an estimate for ${jobs.length} loaded posts…`;
+          updateEstimateProgress(session, progressText);
+          const estimate = await calculateJevEstimate(configuration, jobs, session.id);
           if (session.cancelled || state.stop) break;
           session.latestEstimate = estimate;
           session.render(estimate, jobs);
@@ -789,6 +804,11 @@
     root.querySelector("#jas-prompt").focus();
   }
 
+  function clearEstimateSession(session) {
+    if (!session?.id) return;
+    browser.runtime.sendMessage({ type: "JAS_CLEAR_ESTIMATE_SESSION", sessionId: session.id }).catch(() => {});
+  }
+
   function closeCostEstimate(confirmed) {
     const session = activeEstimate;
     if (confirmed && root?.querySelector(".jas-cost-confirm")?.disabled) return;
@@ -798,6 +818,7 @@
     if (session) session.cancelled = !confirmed;
     if (!confirmed) {
       state.stopLoading = true;
+      clearEstimateSession(session);
       browser.runtime.sendMessage({ type: "JAS_CANCEL" }).catch(() => {});
     }
     const postsPerState = confirmed ? selectedPostsPerState() : null;
@@ -808,7 +829,7 @@
   function isExternalJobUrl(value) {
     try {
       const url = new URL(value);
-      return url.protocol === "https:" && url.hostname !== "jobnet.dk" && !url.hostname.endsWith(".jobnet.dk");
+      return ["http:", "https:"].includes(url.protocol) && url.hostname !== "jobnet.dk" && !url.hostname.endsWith(".jobnet.dk");
     } catch (_) { return false; }
   }
 

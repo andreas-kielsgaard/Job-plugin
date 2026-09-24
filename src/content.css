@@ -69,7 +69,9 @@
 #jas-page-controls .jas-page-heading span { color: #087d67; font-size: 22px; font-weight: 900; letter-spacing: .055em; }
 #jas-page-controls .jas-page-heading strong { font-size: 15px; font-weight: 650; }
 #jas-page-controls .jas-page-heading small { color: #587068; font-size: 12px; }
-#jas-page-controls .jas-page-summary { margin: 10px 0 14px; color: #49645b; }
+#jas-page-controls .jas-page-summary { display: flex; align-items: center; gap: 9px; min-height: 22px; margin: 10px 0 14px; color: #49645b; }
+#jas-page-controls .jas-page-spinner { width: 17px; height: 17px; flex: 0 0 17px; border: 2px solid #9ac4b6; border-top-color: #087d67; border-radius: 50%; animation: jas-spin .75s linear infinite; }
+#jas-page-controls .jas-page-spinner[hidden] { display: none; }
 #jas-page-controls .jas-page-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 #jas-page-controls button { min-height: 42px; padding: 9px 16px; border: 1px solid #17664f; border-radius: 7px; background: white; color: #174f3d; font: inherit; font-weight: 750; cursor: pointer; }
 #jas-page-controls .jas-page-filter { background: #17664f; color: white; }
@@ -81,5 +83,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   #jas-root button, #jas-page-controls button { transition: none; }
-  #jas-root .jas-spinner { animation: none; }
+  #jas-root .jas-spinner, #jas-page-controls .jas-page-spinner { animation: none; }
 }
